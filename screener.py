@@ -509,11 +509,14 @@ def render_stock_screener():
         st.markdown('</div>', unsafe_allow_html=True)
 
         if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
-            st.session_state.screener_selected = set()
-            st.session_state.has_screened = False
-            for k in ["last_screen_sig", "active_screen_conditions",
-                      "last_screen_df", "last_screen_real_labels", "last_screen_mock_labels"]:
-                st.session_state.pop(k, None)
+            # 保留自選股和目前分析中的股票，其餘全清（包含所有 toggle 狀態）
+            watchlist = st.session_state.get("my_watchlist", [])
+            active    = st.session_state.get("active", None)
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+            st.session_state.my_watchlist = watchlist
+            if active is not None:
+                st.session_state.active = active
             st.rerun()
 
         if run:
