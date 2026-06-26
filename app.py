@@ -188,25 +188,9 @@ div[class*="Toolbar"] { display:none !important; }
 .hot-price { font-size:1.05rem; font-weight:700; margin-top:0.25rem; }
 .pos { color:#00A86B; } .neg { color:#E53935; }
 
-/* 新聞列表項目按鈕 */
-.news-list-item button {
-    background:transparent !important; border:none !important;
-    border-bottom:1px solid #F0F1F3 !important; border-radius:0 !important;
-    text-align:left !important; padding:0.55rem 0.3rem !important;
-    color:#374151 !important; font-size:0.76rem !important;
-    white-space:pre-line !important; line-height:1.4 !important;
-    font-weight:400 !important; width:100% !important;
-    height:auto !important; min-height:0 !important;
-    box-shadow:none !important;
-}
-.news-list-item button:hover {
-    background:#F0F7FF !important; color:#2563EB !important;
-    border-bottom-color:#93C5FD !important;
-}
-.news-list-item-active button {
-    background:#EFF6FF !important; border-left:3px solid #3B82F6 !important;
-    color:#1D4ED8 !important; font-weight:600 !important;
-    padding-left:0.6rem !important;
+/* 新聞列表純 HTML 連結 hover */
+a:hover > div[style*="border-bottom:1px solid #EAECEF"] {
+    background:#F0F7FF !important;
 }
 
 .divider { border:none; border-top:1px solid #E8EAED; margin:1rem 0; }
@@ -911,66 +895,69 @@ with tab_news:
     col_n, col_f = st.columns([3, 2])
 
     with col_n:
-        _sel_key = f"news_sel_{active}"
-        if _sel_key not in st.session_state:
-            st.session_state[_sel_key] = 0
+        with st.spinner("抓取新聞…"):
+            nl = get_news(active)
 
-        @st.fragment
-        def _news_panel():
-            with st.spinner("抓取新聞…"):
-                nl = get_news(active)
-            if not nl:
-                st.markdown('<div style="color:#9CA3AF;font-size:0.85rem;padding:1rem 0">暫無新聞</div>', unsafe_allow_html=True)
-                return
-            idx = min(st.session_state.get(_sel_key, 0), len(nl) - 1)
-            sel = nl[idx]
+        if nl:
+            try:
+                _ns_idx = min(int(st.query_params.get("ns", 0)), len(nl) - 1)
+            except Exception:
+                _ns_idx = 0
+            sel = nl[_ns_idx]
 
             sub_list, sub_feat = st.columns([4, 6])
 
             with sub_list:
-                st.markdown("<div style='font-size:0.62rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.3rem'>近期新聞</div>", unsafe_allow_html=True)
-                for i, n in enumerate(nl):
-                    is_sel = (i == idx)
-                    date_str = n["time"].strftime("%m/%d %H:%M")
-                    label = f"{n['title'][:42]}…\n{date_str}" if len(n["title"]) > 42 else f"{n['title']}\n{date_str}"
-                    cls = "news-list-item-active" if is_sel else "news-list-item"
-                    st.markdown(f'<div class="{cls}">', unsafe_allow_html=True)
-                    if st.button(label, key=f"nsel_{active}_{i}", use_container_width=True):
-                        st.session_state[_sel_key] = i
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
+                _list_html = "<div style='font-size:0.60rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.35rem'>近期新聞</div>"
+                for _i, _n in enumerate(nl):
+                    _is_sel  = (_i == _ns_idx)
+                    _short   = _n["title"][:34] + "…" if len(_n["title"]) > 34 else _n["title"]
+                    _ds      = _n["time"].strftime("%m/%d %H:%M")
+                    _bg      = "#EFF6FF" if _is_sel else "#FAFAFA"
+                    _bl      = "3px solid #3B82F6" if _is_sel else "3px solid transparent"
+                    _fw      = "600" if _is_sel else "400"
+                    _tc      = "#1D4ED8" if _is_sel else "#374151"
+                    _list_html += f"""
+                    <a href="?ns={_i}" style="text-decoration:none;display:block">
+                      <div style="padding:0.35rem 0.4rem 0.35rem 0.5rem;background:{_bg};
+                                  border-bottom:1px solid #EAECEF;border-left:{_bl}">
+                        <div style="font-size:0.71rem;font-weight:{_fw};color:{_tc};
+                                    line-height:1.28;display:-webkit-box;
+                                    -webkit-line-clamp:2;-webkit-box-orient:vertical;
+                                    overflow:hidden">{_short}</div>
+                        <div style="font-size:0.60rem;color:#22C55E;margin-top:0.08rem">{_ds}</div>
+                      </div>
+                    </a>"""
+                st.markdown(_list_html, unsafe_allow_html=True)
 
             with sub_feat:
-                t_str = sel["time"].strftime("%Y/%m/%d %H:%M")
-                if sel.get("thumb"):
-                    st.markdown(f"""
-                    <div style="border-radius:12px;overflow:hidden;margin-bottom:0.75rem;
-                                border:1px solid #E8EAED;background:#F7F8FA">
-                        <img src="{sel['thumb']}" style="width:100%;height:190px;object-fit:cover;display:block">
-                    </div>""", unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div style="background:linear-gradient(135deg,#DBEAFE 0%,#EDE9FE 100%);
-                                border-radius:12px;height:190px;display:flex;align-items:center;
-                                justify-content:center;margin-bottom:0.75rem;
-                                border:1px solid #E8EAED">
-                        <span style="font-size:2.5rem">📰</span>
-                    </div>""", unsafe_allow_html=True)
-                st.markdown(f"""
-                <div style="font-size:0.9rem;font-weight:700;color:#111;
-                            line-height:1.5;margin-bottom:0.4rem">{sel['title']}</div>
-                <div style="font-size:0.68rem;color:#22C55E;margin-bottom:0.7rem">
-                    {(sel['publisher'] + ' · ') if sel.get('publisher') else ''}{t_str}
-                </div>""", unsafe_allow_html=True)
+                _t_str   = sel["time"].strftime("%Y/%m/%d %H:%M")
+                _pub_str = (sel["publisher"] + " · ") if sel.get("publisher") else ""
+                _img_html = (
+                    f'<img src="{sel["thumb"]}" style="width:100%;height:172px;object-fit:cover;display:block">'
+                    if sel.get("thumb") else
+                    '<div style="height:172px;display:flex;align-items:center;justify-content:center;'
+                    'background:linear-gradient(135deg,#DBEAFE,#EDE9FE)">'
+                    '<span style="font-size:2.5rem">📰</span></div>'
+                )
+                _link_html = ""
                 if sel.get("link") and sel["link"] != "#":
-                    st.markdown(f"""
-                    <a href="{sel['link']}" target="_blank" style="text-decoration:none">
-                        <div style="display:inline-block;background:#2563EB;color:#fff;
-                                    font-size:0.78rem;font-weight:600;padding:0.4rem 1rem;
-                                    border-radius:8px">🔗 閱讀全文</div>
-                    </a>""", unsafe_allow_html=True)
-
-        _news_panel()
+                    _link_html = (f'<a href="{sel["link"]}" target="_blank" style="text-decoration:none">'
+                                  f'<div style="display:inline-block;background:#2563EB;color:#fff;'
+                                  f'font-size:0.76rem;font-weight:600;padding:0.35rem 0.85rem;'
+                                  f'border-radius:7px;margin-top:0.55rem">🔗 閱讀全文</div></a>')
+                st.markdown(f"""
+                <div style="border-radius:12px;overflow:hidden;border:1px solid #E8EAED;background:#fff">
+                    {_img_html}
+                    <div style="padding:0.72rem 0.85rem 0.8rem">
+                        <div style="font-size:0.87rem;font-weight:700;color:#111;
+                                    line-height:1.42;margin-bottom:0.25rem">{sel['title']}</div>
+                        <div style="font-size:0.64rem;color:#22C55E">{_pub_str}{_t_str}</div>
+                        {_link_html}
+                    </div>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown('<div style="color:#9CA3AF;font-size:0.85rem;padding:1rem 0">暫無新聞</div>', unsafe_allow_html=True)
 
     with col_f:
         st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.75rem'>財報指標</div>", unsafe_allow_html=True)
