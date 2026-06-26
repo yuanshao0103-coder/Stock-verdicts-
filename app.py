@@ -348,9 +348,9 @@ def check_risks(quote, df):
     try:
         vix = float(yf.Ticker("^VIX").history(period="3d")["Close"].iloc[-1])
         if vix >= 30:
-            risks.append({"level": "danger", "msg": f"VIX {vix:.1f} 極度恐慌，建議大幅降低投入"})
+            risks.append({"level": "warn", "msg": f"VIX {vix:.1f} 市場極度恐慌，建議大幅降低投入"})
         elif vix >= 22:
-            risks.append({"level": "warn",   "msg": f"VIX {vix:.1f} 市場警戒"})
+            risks.append({"level": "warn", "msg": f"VIX {vix:.1f} 市場警戒"})
     except:
         pass
 
