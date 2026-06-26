@@ -116,9 +116,17 @@ div[class*="Toolbar"] { display:none !important; }
 .alert-warn   { background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:10px; padding:0.85rem 1.1rem; color:#92400E; font-size:0.82rem; font-weight:500; line-height:1.6; }
 
 /* 股票卡 */
-.hot-chip { background:#fff; border:1px solid #E8EAED; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.1rem; }
+.hot-chip { background:#fff; border:1px solid #E8EAED; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.1rem; transition:box-shadow 0.15s,border-color 0.15s; }
+.hot-chip:hover { border-color:#2563EB44; box-shadow:0 2px 12px rgba(37,99,235,0.10); }
 .hot-ticker { font-family:'DM Mono',monospace; font-size:0.88rem; font-weight:600; color:#0A66C2; }
 .hot-cn { font-size:0.72rem; color:#9CA3AF; }
+/* 卡片點擊：透明按鈕覆蓋 */
+.card-clickable { position:relative; }
+.card-clickable + div[data-testid="stButton"] > button {
+    position:absolute; inset:0; width:100%; height:100%;
+    opacity:0; cursor:pointer; z-index:5;
+    border-radius:12px;
+}
 .hot-price { font-size:1.05rem; font-weight:700; margin-top:0.25rem; }
 .pos { color:#00A86B; } .neg { color:#E53935; }
 
@@ -561,40 +569,48 @@ if not st.session_state.active:
     def render_grid(tickers):
         with st.spinner("載入行情…"):
             stocks = load_stocks(tickers)
-        for q in stocks:
-            chg     = q["chg_pct"]
-            color   = "pos" if chg>=0 else "neg"
-            arrow   = "▲" if chg>=0 else "▼"
-            cn      = q.get("cn_name","")
-            cur     = q.get("currency","TWD")
-            risk    = get_quick_risk_status(q["ticker"])
-            r_emoji = risk["emoji"]
-            r_label = risk["label"]
-            r_color = risk["color"]
-            mkt_cap = q.get("mkt_cap", 0)
-            st.markdown(f"""
-            <div class="hot-chip">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                    <div>
-                        <span style="font-size:0.72rem;font-weight:700;color:{r_color};
-                              background:{'rgba(0,168,107,0.08)' if r_label=='安全' else 'rgba(245,158,11,0.08)' if r_label=='中等' else 'rgba(229,57,53,0.08)'};
-                              border-radius:4px;padding:1px 5px;margin-right:4px;white-space:nowrap">
-                            {r_emoji} {r_label}
-                        </span>
-                        <span class="hot-ticker">{q['ticker']}</span>
-                        {"&nbsp;<span class='hot-cn'>"+cn+"</span>" if cn else ""}
+        # 2 欄排版
+        rows = [stocks[i:i+2] for i in range(0, len(stocks), 2)]
+        for pair in rows:
+            cols = st.columns(2)
+            for col, q in zip(cols, pair):
+                chg     = q["chg_pct"]
+                color   = "pos" if chg>=0 else "neg"
+                arrow   = "▲" if chg>=0 else "▼"
+                cn      = q.get("cn_name","")
+                cur     = q.get("currency","TWD")
+                risk    = get_quick_risk_status(q["ticker"])
+                r_label = risk["label"]
+                r_color = risk["color"]
+                r_emoji = risk["emoji"]
+                mkt_cap = q.get("mkt_cap", 0)
+                pc      = "#00A86B" if chg >= 0 else "#E53935"
+                with col:
+                    st.markdown(f"""
+                    <div class="card-clickable">
+                    <div class="hot-chip" style="min-height:90px;cursor:pointer">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                            <div>
+                                <span style="font-size:0.65rem;font-weight:700;color:{r_color};
+                                      background:{'rgba(0,168,107,0.08)' if r_label=='安全' else 'rgba(245,158,11,0.08)' if r_label=='中等' else 'rgba(229,57,53,0.08)'};
+                                      border-radius:4px;padding:1px 5px;white-space:nowrap">
+                                    {r_emoji} {r_label}
+                                </span><br>
+                                <span class="hot-ticker">{q['ticker']}</span>
+                                {"<br><span class='hot-cn'>"+cn+"</span>" if cn else ""}
+                            </div>
+                            <div style="text-align:right">
+                                <div style="font-family:'DM Mono',monospace;font-size:0.95rem;font-weight:700;color:{pc}">{q['price']:,.1f}</div>
+                                <div style="font-size:0.75rem;font-weight:600;color:{pc}">{arrow}{abs(chg):.2f}%</div>
+                                <div style="font-size:0.62rem;color:#94A3B8;margin-top:0.15rem">{fmt_cap(mkt_cap, cur)}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="text-align:right">
-                        <div class="hot-price {color}">{cur} {q['price']:,.2f}</div>
-                        <div class="{color}" style="font-size:0.8rem;font-weight:600">{arrow} {abs(chg):.2f}%</div>
                     </div>
-                </div>
-                <div style="font-size:0.68rem;color:#94A3B8;margin-top:0.3rem">{fmt_cap(mkt_cap, cur)}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button(f"分析 {q['ticker']}", key=f"btn_{q['ticker']}", use_container_width=True):
-                st.session_state.active = q["ticker"]
-                st.rerun()
+                    """, unsafe_allow_html=True)
+                    if st.button("", key=f"btn_{q['ticker']}", use_container_width=True):
+                        st.session_state.active = q["ticker"]
+                        st.rerun()
 
     with tab_tw:
         render_grid(TW_TICKERS)
