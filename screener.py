@@ -476,6 +476,7 @@ def _inject_screener_css():
 # 主渲染函數
 # ═══════════════════════════════════════════════════════════
 
+@st.fragment
 def render_stock_screener():
     _inject_screener_css()
 
@@ -489,53 +490,54 @@ def render_stock_screener():
     n_selected   = len(st.session_state.screener_selected)
     has_screened = st.session_state.get("has_screened", False)
 
+    # ── 條件選擇區（expander 只包含 toggles，不包含按鈕）──
     label = f"🔍 選股篩選（已選 {n_selected} 項）" if n_selected else "🔍 選股篩選"
-    with st.expander(label, expanded=(not has_screened)):
+    with st.expander(label, expanded=True):
         main_tabs = st.tabs([f"  {name}  " for name in SCREENER_OPTIONS.keys()])
         for tab, (main_name, sub_dict) in zip(main_tabs, SCREENER_OPTIONS.items()):
             with tab:
                 _render_main_category(main_name, sub_dict)
 
         n_selected = len(st.session_state.screener_selected)
-        st.markdown("<hr style='border-color:#E8EAED;margin:1rem 0 0.75rem'>", unsafe_allow_html=True)
         st.markdown(
-            f"<div style='text-align:center;margin-bottom:0.6rem'>"
+            f"<div style='text-align:center;margin:0.75rem 0 0.25rem'>"
             f"目前已勾選 <span class='cond-count'>{n_selected}</span> 項條件</div>",
             unsafe_allow_html=True,
         )
 
-        st.markdown('<div class="run-screen">', unsafe_allow_html=True)
-        run = st.button("執行篩選 🚀", use_container_width=True, key="run_screener")
-        st.markdown('</div>', unsafe_allow_html=True)
+    # ── 按鈕在 expander 外，清除不會影響 expander 開合 ──
+    st.markdown('<div class="run-screen">', unsafe_allow_html=True)
+    run = st.button("執行篩選 🚀", use_container_width=True, key="run_screener")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
-            # 保留自選股和目前分析中的股票，其餘全清（包含所有 toggle 狀態）
-            watchlist = st.session_state.get("my_watchlist", [])
-            active    = st.session_state.get("active", None)
-            for k in list(st.session_state.keys()):
-                del st.session_state[k]
-            st.session_state.my_watchlist = watchlist
-            if active is not None:
-                st.session_state.active = active
+    if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
+        watchlist = st.session_state.get("my_watchlist", [])
+        active    = st.session_state.get("active", None)
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.session_state.my_watchlist = watchlist
+        if active is not None:
+            st.session_state.active = active
+        st.rerun(scope="app")
+
+    if run:
+        if n_selected == 0:
+            st.warning("請先至少勾選一項條件再執行篩選。")
+        else:
+            st.session_state.has_screened = True
+            st.session_state.active_screen_conditions = list(st.session_state.screener_selected)
             st.rerun()
 
-        if run:
-            if n_selected == 0:
-                st.warning("請先至少勾選一項條件再執行篩選。")
-            else:
-                st.session_state.has_screened = True
-                st.session_state.active_screen_conditions = list(st.session_state.screener_selected)
-                st.rerun()
-
-        if st.session_state.get("has_screened") and st.session_state.get("active_screen_conditions"):
-            st.markdown("<hr style='border-color:#E8EAED;margin:1rem 0 0.75rem'>", unsafe_allow_html=True)
-            _render_results(st.session_state.active_screen_conditions)
-        elif not has_screened:
-            st.markdown("""
-            <div style="text-align:center;padding:1.5rem 1rem;color:#9CA3AF">
-                <div style="font-size:0.8rem;margin-top:0.4rem">勾選條件後按執行篩選，結果會顯示在這裡</div>
-            </div>
-            """, unsafe_allow_html=True)
+    # ── 篩選結果 ──
+    if st.session_state.get("has_screened") and st.session_state.get("active_screen_conditions"):
+        st.markdown("<hr style='border-color:#E8EAED;margin:1rem 0 0.75rem'>", unsafe_allow_html=True)
+        _render_results(st.session_state.active_screen_conditions)
+    elif not has_screened:
+        st.markdown("""
+        <div style="text-align:center;padding:1.5rem 1rem;color:#9CA3AF">
+            <div style="font-size:0.8rem;margin-top:0.4rem">勾選條件後按執行篩選，結果會顯示在這裡</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     _render_watchlist()
 
@@ -710,7 +712,7 @@ def _render_watchlist():
         with col_analyze:
             if st.button("🔍 分析", key=f"analyze_{ticker}_{i}", use_container_width=True):
                 st.session_state.active = ticker
-                st.rerun()
+                st.rerun(scope="app")
         with col_remove:
             if st.button("移除", key=f"remove_{ticker}_{i}", use_container_width=True):
                 st.session_state.my_watchlist = [s for s in wl if s["ticker"] != ticker]
