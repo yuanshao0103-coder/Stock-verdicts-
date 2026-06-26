@@ -368,7 +368,15 @@ def check_risks(quote, df):
                    "屬於高風險成長股，估值泡沫風險高"})
 
     if pe and pe > 0:
-        th = 80 if "Technology" in quote.get("sector", "") else 50
+        _sector = quote.get("sector", "") or ""
+        _ticker_up = quote.get("ticker", "")
+        _is_tech = (
+            "Technology" in _sector or
+            "Semiconductor" in _sector or
+            "Electronic" in _sector or
+            _ticker_up.endswith(".TW")  # 台股普遍 PE 偏高，統一用科技門檻
+        )
+        th = 80 if _is_tech else 50
         if pe > th * 2:
             risks.append({"level": "danger",
                 "msg": f"P/E {pe:.0f}x 極度高估（超過合理值 {int(th*2)}x），小心估值崩塌"})
@@ -726,8 +734,8 @@ _cur_sign = "NT$" if cur == "TWD" else "$"
 for col,(label,val) in zip([m1,m2,m3,m4],[
     ("市值",   fmt_cap(quote["mkt_cap"], cur) if quote["mkt_cap"] else "N/A"),
     ("本益比", f"{quote['pe']:.1f}x"     if quote["pe"]      else "N/A"),
-    ("52W高",  f"{_cur_sym} {quote['w52h']:,.2f}"  if quote["w52h"] else "N/A"),
-    ("52W低",  f"{_cur_sym} {quote['w52l']:,.2f}"  if quote["w52l"] else "N/A"),
+    ("一年最高價", f"{_cur_sym} {quote['w52h']:,.2f}" if quote["w52h"] else "N/A"),
+    ("一年最低價", f"{_cur_sym} {quote['w52l']:,.2f}" if quote["w52l"] else "N/A"),
 ]):
     with col:
         st.markdown(f"""
