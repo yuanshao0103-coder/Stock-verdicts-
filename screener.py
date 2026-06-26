@@ -511,7 +511,11 @@ def render_stock_screener():
         if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
             st.session_state.screener_selected = set()
             st.session_state.has_screened = False
-            st.session_state.screener_gen += 1  # 強制所有 toggle 重建
+            st.session_state.screener_gen += 1
+            # 把所有 toggle 的 session_state 值設為 False（不能只刪除，瀏覽器會重新傳回舊值）
+            for k in list(st.session_state.keys()):
+                if k.startswith("tg_"):
+                    st.session_state[k] = False
             for k in ["last_screen_sig", "active_screen_conditions",
                       "last_screen_df", "last_screen_real_labels", "last_screen_mock_labels"]:
                 st.session_state.pop(k, None)
