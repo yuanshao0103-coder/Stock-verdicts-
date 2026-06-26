@@ -958,24 +958,72 @@ with tab_news:
             st.markdown('<div style="color:#9CA3AF;font-size:0.85rem;padding:1rem 0">暫無新聞</div>', unsafe_allow_html=True)
 
     with col_f:
-        st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.75rem'>財報指標</div>", unsafe_allow_html=True)
-        def fin_row(k,v,pos=None):
-            c = "#9CA3AF" if v in (None,"N/A") else "#00A86B" if pos is True else "#E53935" if pos is False else "#111"
-            return f'<div style="display:flex;justify-content:space-between;padding:0.65rem 0;border-bottom:1px solid #F0F1F3"><span style="font-size:0.8rem;color:#6B7280">{k}</span><span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:500;color:{c}">{v}</span></div>'
+        st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.6rem'>財報指標</div>", unsafe_allow_html=True)
 
-        pe=quote.get("pe"); pb=quote.get("pb"); eps=quote.get("eps")
-        rev=quote.get("rev_growth"); beta=quote.get("beta"); tgt=quote.get("target")
-        rev_s = f"+{rev*100:.1f}%" if rev and rev>0 else (f"{rev*100:.1f}%" if rev else "N/A")
-        up = (tgt/price-1)*100 if tgt and price else None
-        up_s = f"{_cur_sign}{tgt:.2f} ({up:+.1f}%)" if up else "N/A"
+        def fin_row(k, v, clr="#111"):
+            c = "#9CA3AF" if v in (None, "N/A") else clr
+            return (f'<div style="display:flex;justify-content:space-between;padding:0.6rem 0;'
+                    f'border-bottom:1px solid #F0F1F3">'
+                    f'<span style="font-size:0.8rem;color:#6B7280">{k}</span>'
+                    f'<span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:500;color:{c}">{v}</span></div>')
 
-        html = (fin_row("本益比 P/E", f"{pe:.1f}x" if pe else "N/A") +
-                fin_row("股價淨值比", f"{pb:.2f}x" if pb else "N/A") +
-                fin_row("EPS",        f"{_cur_sign}{eps:.2f}" if eps else "N/A") +
-                fin_row("營收成長",   rev_s, pos=(rev>0) if rev else None) +
-                fin_row("Beta",       f"{beta:.2f}" if beta else "N/A") +
-                fin_row("目標價",     up_s, pos=(up>0) if up else None) +
-                fin_row("分析師評級", quote.get("rec","").upper() or "N/A"))
+        pe  = quote.get("pe");  pb  = quote.get("pb");   eps  = quote.get("eps")
+        rev = quote.get("rev_growth"); beta = quote.get("beta"); tgt = quote.get("target")
+        rec = (quote.get("rec") or "").lower()
+        rev_s = f"+{rev*100:.1f}%" if rev and rev > 0 else (f"{rev*100:.1f}%" if rev else "N/A")
+        up    = (tgt / price - 1) * 100 if tgt and price else None
+        up_s  = f"{_cur_sign}{tgt:.2f} ({up:+.1f}%)" if up else "N/A"
+
+        _sec    = quote.get("sector", "") or ""
+        _is_tch = "Technology" in _sec or "Semiconductor" in _sec or "Electronic" in _sec or active.endswith(".TW")
+        _pe_hi  = 80 if _is_tch else 50
+
+        G, Y, R, N = "#00A86B", "#F59E0B", "#E53935", "#9CA3AF"
+
+        pe_c   = N if not pe   else (G if pe < 20            else (Y if pe <= _pe_hi  else R))
+        pb_c   = N if not pb   else (G if pb < 2             else (Y if pb <= 6        else R))
+        eps_c  = N if not eps  else (G if eps > 0            else R)
+        rev_c  = N if rev is None else (G if rev > 0.10      else (Y if rev > 0        else R))
+        beta_c = N if not beta else (G if beta < 0.8         else (Y if beta <= 1.5    else R))
+        up_c   = N if up is None  else (G if up > 15         else (Y if up > 0         else R))
+        rec_c  = (G if rec in ("strong_buy","buy","strongbuy")
+                  else R if rec in ("sell","strong_sell","strongsell","underperform")
+                  else Y if rec in ("hold","neutral")
+                  else N)
+
+        _clrs   = [pe_c, pb_c, eps_c, rev_c, beta_c, up_c, rec_c]
+        _valid  = [c for c in _clrs if c != N]
+        _greens = _valid.count(G); _reds = _valid.count(R)
+        _fscore = _greens - _reds
+
+        if _fscore >= 3:
+            _fl, _fc, _fbg, _fe = "有料", G, "#F0FDF4", "🟢"
+        elif _fscore >= 0:
+            _fl, _fc, _fbg, _fe = "一般", Y, "#FFFBEB", "🟡"
+        else:
+            _fl, _fc, _fbg, _fe = "裂開", R, "#FFF5F5", "🔴"
+
+        _banner = f"""
+        <div style="background:{_fbg};border-left:4px solid {_fc};border-radius:10px;
+                    padding:0.58rem 0.9rem;margin-bottom:0.5rem;
+                    display:flex;align-items:center;gap:0.55rem">
+            <div style="font-size:1.5rem;line-height:1">{_fe}</div>
+            <div>
+                <div style="font-size:1.05rem;font-weight:700;color:{_fc};
+                            letter-spacing:-0.01em">{_fl}</div>
+                <div style="font-size:0.61rem;color:#9CA3AF;margin-top:0.05rem">
+                    {_greens} 綠燈 · {_reds} 紅燈 · 共 {len(_valid)} 項</div>
+            </div>
+        </div>"""
+
+        html = (_banner +
+                fin_row("本益比 P/E", f"{pe:.1f}x"         if pe   else "N/A", pe_c) +
+                fin_row("股價淨值比", f"{pb:.2f}x"          if pb   else "N/A", pb_c) +
+                fin_row("EPS",        f"{_cur_sign}{eps:.2f}" if eps  else "N/A", eps_c) +
+                fin_row("營收成長",   rev_s, rev_c) +
+                fin_row("Beta",       f"{beta:.2f}"          if beta  else "N/A", beta_c) +
+                fin_row("目標價",     up_s, up_c) +
+                fin_row("分析師評級", rec.upper() or "N/A",  rec_c))
         st.markdown(f'<div class="card">{html}</div>', unsafe_allow_html=True)
 
         funny = get_funny_desc(active, quote.get("desc", ""))
