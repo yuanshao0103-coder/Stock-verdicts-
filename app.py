@@ -327,6 +327,18 @@ def get_quote(ticker):
         "fetched_at": fetched_at,
     }
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_long_history(ticker):
+    try:
+        h = yf.Ticker(ticker).history(period="5y", auto_adjust=True)
+        if h.empty:
+            h = yf.Ticker(ticker).history(period="3y", auto_adjust=True)
+        if not h.empty:
+            h.index = pd.to_datetime(h.index).tz_localize(None)
+        return h
+    except Exception:
+        return pd.DataFrame()
+
 @st.cache_data(ttl=60, show_spinner=False)
 def get_history(ticker, period="1y"):
     try:
@@ -1151,6 +1163,89 @@ with tab_trade:
                     到達目標或觸碰停損任一先到先出場</div>
             </div>
             """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+        # ── 週度投資機會圖 ────────────────────────────────
+        st.markdown("<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 歷年週度勝率 vs 成交量</div>", unsafe_allow_html=True)
+        try:
+            import plotly.graph_objects as go_w
+            _lh = get_long_history(active)
+            _df_w = _lh if not _lh.empty else df.copy()
+            _df_w = _df_w.copy()
+            _df_w.index = pd.to_datetime(_df_w.index)
+            if hasattr(_df_w.index, "tz") and _df_w.index.tz is not None:
+                _df_w.index = _df_w.index.tz_localize(None)
+            _wk = _df_w.resample("W").agg({"Close": ["first", "last"], "Volume": "sum"})
+            _wk.columns = ["wk_open", "wk_close", "wk_vol"]
+            _wk["week_num"] = pd.to_datetime(_wk.index).isocalendar().week.astype(int)
+            _wk["is_up"] = (_wk["wk_close"] > _wk["wk_open"]).astype(int)
+            _by_wk = _wk.groupby("week_num").agg(
+                win_rate=("is_up", "mean"),
+                avg_vol=("wk_vol", "mean")
+            ).reset_index()
+            _by_wk = _by_wk[_by_wk["week_num"].between(1, 52)].reset_index(drop=True)
+            _cur_wk = int(datetime.now().isocalendar()[1])
+            _bar_clr = [
+                "#3B82F6" if int(w) == _cur_wk else
+                "#22C55E" if r > 0.55 else
+                "#F87171" if r < 0.45 else "#FCD34D"
+                for w, r in zip(_by_wk["week_num"], _by_wk["win_rate"])
+            ]
+            _fig_w = go_w.Figure()
+            _fig_w.add_trace(go_w.Bar(
+                x=_by_wk["week_num"],
+                y=(_by_wk["win_rate"] * 100).round(1),
+                name="歷史獲利機率",
+                marker_color=_bar_clr,
+                opacity=0.85,
+                yaxis="y",
+                hovertemplate="第%{x}週<br>獲利機率 %{y:.1f}%<extra></extra>",
+            ))
+            _vol_unit = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
+            _vol_label = "千張" if _vol_unit == 1000 else "張"
+            _fig_w.add_trace(go_w.Scatter(
+                x=_by_wk["week_num"],
+                y=(_by_wk["avg_vol"] / _vol_unit).round(0),
+                name=f"平均週成交量({_vol_label})",
+                mode="lines+markers",
+                marker=dict(size=5, color="#6366F1", symbol="circle"),
+                line=dict(color="#6366F1", width=1.8, dash="dot"),
+                yaxis="y2",
+                hovertemplate=f"第%{{x}}週<br>成交量 %{{y:,.0f}}{_vol_label}<extra></extra>",
+            ))
+            _fig_w.add_hline(y=50, line_width=1, line_dash="dash", line_color="#D1D5DB", yref="y",
+                             annotation_text="50%", annotation_position="right",
+                             annotation_font_size=9, annotation_font_color="#9CA3AF")
+            _fig_w.update_layout(
+                height=240,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=55, t=28, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.0,
+                            bgcolor="rgba(0,0,0,0)", font_size=10, x=0),
+                xaxis=dict(
+                    title=None, gridcolor="#F5F5F5",
+                    tickmode="array",
+                    tickvals=[w for w in _by_wk["week_num"] if w % 4 == 0 or w == 1 or w == _cur_wk],
+                    ticktext=[f"第{w}週{'⬅' if w==_cur_wk else ''}"
+                              for w in _by_wk["week_num"] if w % 4 == 0 or w == 1 or w == _cur_wk],
+                    tickfont=dict(size=10),
+                ),
+                yaxis=dict(
+                    title=None, gridcolor="#F0F1F3",
+                    range=[0, 105], ticksuffix="%", tickfont=dict(size=10),
+                ),
+                yaxis2=dict(
+                    title=None, overlaying="y", side="right",
+                    showgrid=False, tickfont=dict(size=10),
+                ),
+                hovermode="x unified",
+                bargap=0.25,
+            )
+            st.plotly_chart(_fig_w, use_container_width=True)
+        except Exception:
+            pass
 
         st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
 
