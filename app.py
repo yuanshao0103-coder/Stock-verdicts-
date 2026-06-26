@@ -739,7 +739,7 @@ for col,(label,val) in zip([m1,m2,m3,m4],[
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
 # Tabs
-tab_chart, tab_news = st.tabs(["📈  走勢與預測", "📰  新聞與財報"])
+tab_chart, tab_news, tab_trade = st.tabs(["📈  走勢與預測", "📰  新聞與財報", "💰  真的要投？好啦"])
 
 with tab_chart:
     try:
@@ -829,3 +829,240 @@ with tab_news:
         if desc:
             with st.expander("公司簡介"):
                 st.markdown(f'<div style="font-size:0.8rem;color:#6B7280;line-height:1.8">{desc[:500]}…</div>', unsafe_allow_html=True)
+
+with tab_trade:
+    try:
+        close_t = df["Close"].dropna()
+        vol_t   = df["Volume"].dropna()
+
+        # ── RSI(14) ──────────────────────────────────────
+        delta    = close_t.diff()
+        gain     = delta.clip(lower=0).rolling(14).mean()
+        loss     = (-delta.clip(upper=0)).rolling(14).mean()
+        rsi_s    = 100 - (100 / (1 + gain / loss.replace(0, float("nan"))))
+        cur_rsi  = float(rsi_s.iloc[-1]) if not rsi_s.empty else 50.0
+
+        # ── 趨勢 ─────────────────────────────────────────
+        ma200      = close_t.rolling(200).mean()
+        above_ma   = bool(close_t.iloc[-1] > ma200.iloc[-1]) if len(ma200.dropna()) > 0 else True
+        ma200_val  = float(ma200.iloc[-1]) if not ma200.dropna().empty else price
+
+        # ── 52W 位置 ──────────────────────────────────────
+        w52h_v = quote.get("w52h") or float(close_t.max())
+        w52l_v = quote.get("w52l") or float(close_t.min())
+        price_pct_in_range = (price - w52l_v) / (w52h_v - w52l_v) * 100 if w52h_v > w52l_v else 50.0
+
+        # ── 量能比 ───────────────────────────────────────
+        vol_ratio = float(vol_t.tail(5).mean() / vol_t.tail(60).mean()) if len(vol_t) >= 60 else 1.0
+
+        # ── 操盤評分 ─────────────────────────────────────
+        score = 0
+        reasons = []
+        if cur_rsi < 35:
+            score += 3; reasons.append(f"RSI {cur_rsi:.0f} 超賣區，籌碼洗乾淨")
+        elif cur_rsi < 50:
+            score += 1; reasons.append(f"RSI {cur_rsi:.0f} 中性偏低")
+        elif cur_rsi > 70:
+            score -= 2; reasons.append(f"RSI {cur_rsi:.0f} 過熱，追高風險大")
+
+        if above_ma:
+            score += 1; reasons.append("站穩年線，長期趨勢向上")
+        else:
+            score -= 1; reasons.append("跌破年線，趨勢偏弱")
+
+        if price_pct_in_range < 25:
+            score += 2; reasons.append(f"股價接近年低（年內 {price_pct_in_range:.0f}% 位置）")
+        elif price_pct_in_range > 80:
+            score -= 1; reasons.append(f"股價靠近年高（年內 {price_pct_in_range:.0f}% 位置）")
+
+        win_r = mc["win"]
+        if win_r >= 72: score += 2
+        elif win_r >= 60: score += 1
+        elif win_r < 45: score -= 2
+
+        if vol_ratio >= 2.0:
+            score -= 1; reasons.append(f"爆量 {vol_ratio:.1f}x，主力可能出貨")
+        elif vol_ratio < 0.6:
+            score += 1; reasons.append("縮量盤整，蓄勢待發")
+
+        # ── 總結 ─────────────────────────────────────────
+        if score >= 4:
+            verdict_label = "✅ 可以進場"
+            verdict_color = "#00A86B"
+            verdict_bg    = "rgba(0,168,107,0.07)"
+            verdict_sub   = "多項指標同時看好，時機成熟"
+        elif score >= 1:
+            verdict_label = "⏳ 等待更好時機"
+            verdict_color = "#F59E0B"
+            verdict_bg    = "rgba(245,158,11,0.07)"
+            verdict_sub   = "條件尚未全部到位，可列入觀察"
+        else:
+            verdict_label = "🚫 暫時避開"
+            verdict_color = "#E53935"
+            verdict_bg    = "rgba(229,57,53,0.07)"
+            verdict_sub   = "多項指標偏空，等反轉信號再說"
+
+        st.markdown(f"""
+        <div style="background:{verdict_bg};border:1.5px solid {verdict_color}33;border-radius:12px;
+                    padding:1rem 1.25rem;margin-bottom:1rem">
+            <div style="font-size:1.15rem;font-weight:700;color:{verdict_color}">{verdict_label}</div>
+            <div style="font-size:0.78rem;color:#6B7280;margin-top:0.2rem">{verdict_sub}</div>
+            <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">{'　·　'.join(reasons[:3])}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── 買入 / 出場 並排 ──────────────────────────────
+        col_buy, col_sell = st.columns(2)
+
+        # 理想進場價：RSI 偏高就等跌，否則現價附近
+        if cur_rsi > 60:
+            ideal_entry = price * 0.95
+            entry_note  = "建議等回檔 5% 再進"
+        elif cur_rsi > 50:
+            ideal_entry = price * 0.97
+            entry_note  = "可小量試水，等確認後加碼"
+        else:
+            ideal_entry = price
+            entry_note  = "現價附近可直接進場"
+
+        # Kelly 倉位
+        win_p  = mc["win"] / 100
+        loss_p = mc["loss"] / 100
+        avg_w  = max(mc["p90"] / 100, 0.01)
+        avg_l  = max(abs(mc["p10"]) / 100, 0.01)
+        kelly  = max(0.0, min((win_p * avg_w - loss_p * avg_l) / avg_w, 0.30))
+        half_kelly = kelly * 0.5
+        pos_pct = round(half_kelly * 100)
+
+        # 目標 & 止損
+        target_price = mc["entry"] * np.exp(
+            (mc["mu"] - 0.5 * mc["sigma"]**2) * hold_days
+            + mc["sigma"] * np.sqrt(hold_days) * 1.28)
+        stop_pct    = max(0.07, mc["sigma"] * np.sqrt(21) * 1.5)  # 1.5σ 月波動
+        stop_price  = price * (1 - stop_pct)
+        target_pct  = (target_price / price - 1) * 100
+        stop_pct_show = stop_pct * 100
+
+        with col_buy:
+            st.markdown(f"""
+            <div class="card" style="padding:1rem 1.1rem">
+                <div style="font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;
+                            text-transform:uppercase;margin-bottom:0.6rem">買入策略</div>
+                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
+                            border-bottom:1px solid #F0F1F3">
+                    <span style="font-size:0.8rem;color:#6B7280">理想進場價</span>
+                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600">
+                        {cur} {ideal_entry:,.2f}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
+                            border-bottom:1px solid #F0F1F3">
+                    <span style="font-size:0.8rem;color:#6B7280">建議倉位</span>
+                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600">
+                        {pos_pct}% 資金</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
+                            border-bottom:1px solid #F0F1F3">
+                    <span style="font-size:0.8rem;color:#6B7280">分批策略</span>
+                    <span style="font-size:0.8rem;font-weight:600">50% 進 → 跌5% 加50%</span>
+                </div>
+                <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">{entry_note}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_sell:
+            st.markdown(f"""
+            <div class="card" style="padding:1rem 1.1rem">
+                <div style="font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;
+                            text-transform:uppercase;margin-bottom:0.6rem">出場策略</div>
+                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
+                            border-bottom:1px solid #F0F1F3">
+                    <span style="font-size:0.8rem;color:#6B7280">目標賣出</span>
+                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600;color:#00A86B">
+                        {cur} {target_price:,.2f} (+{target_pct:.1f}%)</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
+                            border-bottom:1px solid #F0F1F3">
+                    <span style="font-size:0.8rem;color:#6B7280">停損點</span>
+                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600;color:#E53935">
+                        {cur} {stop_price:,.2f} (-{stop_pct_show:.1f}%)</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
+                            border-bottom:1px solid #F0F1F3">
+                    <span style="font-size:0.8rem;color:#6B7280">預計持有</span>
+                    <span style="font-size:0.8rem;font-weight:600">{hold_choice}</span>
+                </div>
+                <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">
+                    到達目標或觸碰停損任一先到先出場</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+
+        # ── 法人動向 ─────────────────────────────────────
+        st.markdown("<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.5rem'>法人動向（近5日）</div>", unsafe_allow_html=True)
+
+        stock_id_raw = active.split(".")[0]
+        inst_html = ""
+        inst_ok   = False
+
+        try:
+            from screener import _fetch_institutional_data, _FOREIGN, _TRUST, _DEALER, _latest_net
+            inst_raw = _fetch_institutional_data(stock_id_raw)
+            if not inst_raw.empty:
+                inst_ok = True
+                def _net_row(label, names, color_pos, color_neg):
+                    nets = _latest_net(inst_raw, names, days=5)
+                    if nets.empty:
+                        return ""
+                    total = int(nets.sum())
+                    arrow = "▲" if total >= 0 else "▼"
+                    clr   = color_pos if total >= 0 else color_neg
+                    action = "買超" if total >= 0 else "賣超"
+                    return (f'<div style="display:flex;justify-content:space-between;padding:0.5rem 0;'
+                            f'border-bottom:1px solid #F0F1F3">'
+                            f'<span style="font-size:0.8rem;color:#6B7280">{label}</span>'
+                            f'<span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600;color:{clr}">'
+                            f'{arrow} {abs(total):,} 張 {action}</span></div>')
+
+                inst_html = (
+                    _net_row("外資", _FOREIGN, "#00A86B", "#E53935") +
+                    _net_row("投信", _TRUST,   "#00A86B", "#E53935") +
+                    _net_row("自營商", _DEALER, "#00A86B", "#E53935")
+                )
+        except Exception:
+            pass
+
+        if inst_ok and inst_html:
+            # 三大法人合計方向
+            try:
+                all_nets = _latest_net(inst_raw, _FOREIGN | _TRUST | _DEALER, days=5)
+                total_all = int(all_nets.sum())
+                overall   = "法人合計 買超" if total_all >= 0 else "法人合計 賣超"
+                ov_color  = "#00A86B" if total_all >= 0 else "#E53935"
+                inst_html += (f'<div style="padding:0.6rem 0;font-size:0.78rem;font-weight:700;color:{ov_color}">'
+                              f'{"▲" if total_all>=0 else "▼"} {overall} {abs(total_all):,} 張</div>')
+            except Exception:
+                pass
+            st.markdown(f'<div class="card" style="padding:0.6rem 1.1rem">{inst_html}</div>', unsafe_allow_html=True)
+        else:
+            # 無法人資料時用成交量代替
+            vol5  = float(vol_t.tail(5).mean()) if len(vol_t) >= 5  else 0
+            vol20 = float(vol_t.tail(20).mean()) if len(vol_t) >= 20 else vol5
+            ratio = vol5 / vol20 if vol20 else 1.0
+            vol_signal = "量增" if ratio >= 1.2 else "量縮" if ratio <= 0.8 else "量平"
+            vol_clr    = "#00A86B" if ratio >= 1.2 else "#9CA3AF"
+            st.markdown(f"""
+            <div class="card" style="padding:0.75rem 1.1rem;color:#9CA3AF;font-size:0.78rem">
+                法人籌碼資料暫不可用（限台股）<br>
+                <span style="color:{vol_clr};font-weight:600">近5日均量 vs 月均量：{ratio:.2f}x（{vol_signal}）</span>
+            </div>""", unsafe_allow_html=True)
+
+        # ── 免責聲明 ──────────────────────────────────────
+        st.markdown("""
+        <div style="font-size:0.65rem;color:#C4C9D4;margin-top:1rem;line-height:1.6">
+        ⚠️ 以上分析由演算法自動生成，僅供參考，不構成投資建議。
+        股市有風險，投資前請自行判斷。
+        </div>""", unsafe_allow_html=True)
+
+    except Exception as e:
+        st.warning(f"分析計算錯誤：{e}")
