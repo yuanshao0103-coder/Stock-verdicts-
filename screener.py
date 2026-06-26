@@ -188,30 +188,20 @@ def _fetch_universe_ohlcv(tickers: tuple) -> dict:
     if cached is not None:
         return cached
 
-    # 快取不存在，即時從 yfinance 下載
-    ticker_list = list(tickers)
-    try:
-        raw = yf.download(
-            ticker_list, period="1y", auto_adjust=True,
-            group_by="ticker", progress=False, threads=True,
-        )
-    except Exception:
-        return {}
-
+    # 快取不存在，個別下載（批次下載 TW 股票常 timeout）
     result = {}
-    if len(ticker_list) == 1:
-        t = ticker_list[0]
-        if not raw.empty:
-            result[t] = raw
-        return result
-
-    for t in ticker_list:
-        try:
-            df = raw[t].dropna(how="all")
-            if not df.empty:
-                result[t] = df
-        except (KeyError, TypeError):
-            pass
+    for ticker in tickers:
+        for attempt in range(2):
+            try:
+                df = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
+                if hasattr(df.index, "tz") and df.index.tz is not None:
+                    df.index = df.index.tz_localize(None)
+                if not df.empty:
+                    result[ticker] = df
+                break
+            except Exception:
+                if attempt == 0:
+                    import time; time.sleep(1)
     return result
 
 
@@ -493,6 +483,8 @@ def render_stock_screener():
         st.session_state.screener_selected = set()
     if "my_watchlist" not in st.session_state:
         st.session_state.my_watchlist = []
+    if "screener_gen" not in st.session_state:
+        st.session_state.screener_gen = 0
 
     n_selected   = len(st.session_state.screener_selected)
     has_screened = st.session_state.get("has_screened", False)
@@ -519,11 +511,10 @@ def render_stock_screener():
         if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
             st.session_state.screener_selected = set()
             st.session_state.has_screened = False
+            st.session_state.screener_gen += 1  # 強制所有 toggle 重建
             for k in ["last_screen_sig", "active_screen_conditions",
                       "last_screen_df", "last_screen_real_labels", "last_screen_mock_labels"]:
                 st.session_state.pop(k, None)
-            for k in [k for k in st.session_state if k.startswith("tg_")]:
-                del st.session_state[k]
             st.rerun()
 
         if run:
@@ -573,7 +564,8 @@ def _render_main_category(main_name: str, sub_dict: dict):
             display = f"📊 {lbl}"
         else:
             display = lbl
-        new_val = st.toggle(display, value=is_checked, key=f"tg_{key}")
+        gen = st.session_state.get("screener_gen", 0)
+        new_val = st.toggle(display, value=is_checked, key=f"tg_{key}_{gen}")
         if new_val:
             st.session_state.screener_selected.add(key)
         else:
