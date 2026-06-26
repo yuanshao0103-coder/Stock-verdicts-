@@ -12,8 +12,8 @@ import pytz
 from screener import render_stock_screener
 
 st.set_page_config(
-    page_title="Stock Verdict",
-    page_icon="📋",
+    page_title="沅劭帶你賺大錢",
+    page_icon="💰",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -36,6 +36,43 @@ STOCK_NAMES = {
     "2303.TW":"聯電","3008.TW":"大立光","2412.TW":"中華電",
     "2002.TW":"中鋼","1301.TW":"台塑","2886.TW":"兆豐金",
 }
+
+FUNNY_DESCS = {
+    "TSM":     "全世界最強晶片代工廠！你手上的iPhone、顯卡、AI伺服器，99%的晶片都是台積電做的。全球科技業都要跪著叫他們「晶圓教主」，沒有台積電，輝達、蘋果通通得跪著求饒。",
+    "2330.TW": "全世界最強晶片代工廠！你手上的iPhone、顯卡、AI伺服器，99%的晶片都是台積電做的。全球科技業都要跪著叫他們「晶圓教主」，沒有台積電，輝達、蘋果通通得跪著求饒。",
+    "NVDA":    "本來只是做打遊戲用的顯卡，沒想到AI時代來了，老黃（CEO黃仁勳）直接搖身一變成科技界的神。現在每個AI公司都要排隊求他賣GPU，黃仁勳出場穿皮衣比明星還有排場。",
+    "AAPL":    "賣手機、電腦、耳機，但重點是他們賣的不是產品，是「生活方式」。一台iPhone賣你三萬，你還覺得自己賺到了——這就是蘋果的邪教魔法，加入了就出不去。",
+    "MSFT":    "就是那個讓你天天用的Windows跟Office。現在又大舉投資OpenAI（ChatGPT他爸），準備稱霸AI時代。老牌企業重返巔峰，穩如老狗——比你想得更能打。",
+    "AMZN":    "從賣書起家，現在什麼都賣。但賺最多的其實是AWS雲端服務，全球一半的網站都跑在他家伺服器上。貝佐斯能去太空玩，就是靠你每次在Amazon買東西湊出來的火箭錢。",
+    "META":    "就是Facebook媽媽公司，旗下還有IG跟WhatsApp。砸幾千億蓋元宇宙蓋到虧爆，但廣告業務照樣賺翻——因為你每次滑IG看到廣告，都是在幫祖克柏還元宇宙的債。",
+    "GOOGL":   "你每天查資料、看YouTube、用Gmail——都是他家的。本業是賣廣告，也就是說你每次Google完去點廣告，都是在幫他繳員工薪水。全世界最大的「免費服務」其實你才是產品。",
+    "AMD":     "Intel的最強對手，靠著Ryzen和RX顯卡把Intel打得滿地找牙。執行長蘇姿丰（苦媽）帶著工程師默默逆襲，現在也跑去跟輝達搶AI生意。矽谷最勵志的翻身故事。",
+    "AVGO":    "不常聽說但超賺的半導體公司，做網路晶片、儲存控制器之類的零件。就是那種你看不到、但沒它資料中心直接停機的「幕後黑手」。悶聲發大財的典範。",
+    "TSLA":    "馬斯克的電動車王國，賣車只是表面，他真正的夢想是全自動駕駛AI和機器人。股價波動比雲霄飛車還刺激，粉絲和放空者每天都在互相咒罵——但你不得不承認這傢伙很有戲。",
+    "INTC":    "曾經的處理器之神，被AMD打到丟失半壁江山，又沒搭上AI算力浪潮。現在靠「重建晶圓廠」的故事在撐，能否王者歸來？讓我們繼續看這齣落難貴族的復仇劇。",
+    "QCOM":    "你手機裡的驍龍晶片十之八九是他家的，加上無線通訊專利，只要有人打電話，他就默默抽錢。悶聲發大財的隱形收費站，每通電話都在幫他賺錢。",
+    "2317.TW": "全球最大電子代工廠，幫蘋果組裝iPhone就是他們！廠房超大、員工超多。每次iPhone發表，股價就開始躁動——因為郭台銘的工廠又要日夜趕工了。",
+    "2454.TW": "台灣的手機晶片之王！從早年「山寨機晶片」出道，現在已是高端旗艦玩家，三星、小米、OPPO都跟他買晶片。蔡明介靠技術硬實力，把聯發科從山寨洗白成精品。",
+    "2308.TW": "電源供應器和散熱風扇做到全球第一。AI資料中心的電費和熱量都是天文數字，台達電就靠這個悶聲數鈔票。本業低調但護城河深，科技業用電量越大他越爽。",
+    "2881.TW": "台灣最大金融集團之一，銀行＋保險＋證券一把抓。台灣人不管是存錢、投資還是保命，很多都在跟富邦打交道。老蔡家族的金融帝國——低調但爸爸很有錢。",
+    "2882.TW": "台灣壽險龍頭，台灣阿姨大叔買保險，十個有四個選國泰。業務穩健，配息規律，是那種你祖母會推薦你買的股票——而且她通常是對的。",
+    "2303.TW": "台積電的老二，同樣做晶圓代工，但主打「成熟製程」。先進製程比不上台積電，但很多產品根本不需要最先進的，聯電就是那個「夠用就好、CP值高」的選擇。",
+    "3008.TW": "全球最強手機鏡頭製造商！iPhone能拍那麼好的照片，大立光的鏡頭功不可沒。技術壁壘超高，全球競爭者想追上，先準備個十年再說。",
+    "2412.TW": "台灣最大電信商，你的4G/5G信號、網路、電話費，很多都進了中華電的口袋。業務超級穩定、每年配息，是阿公阿嬤最愛的定存股——無聊但讓人安心。",
+    "2002.TW": "台灣最大鋼鐵廠，台灣蓋橋、鋪路、建大樓的鋼筋很多都是他家的。景氣好的時候超賺，景氣差的時候靠配息撐著——典型的景氣循環股，要懂得跟著景氣跳舞。",
+    "1301.TW": "王永慶老先生創立的石化巨頭！從塑膠袋到汽車零件，生活裡很多「塑膠類」東西都跟他有關係。老牌台灣企業，穩健低調，就是那種默默賺了幾十年的大叔。",
+    "2886.TW": "老字號公股銀行，背後有政府撐腰，穩健但成長慢。配息穩定，是保守型投資人的最愛——不求爆發但求長久，適合那種你爸爸幫你買、然後忘記的股票。",
+}
+
+def get_funny_desc(ticker, original):
+    t = ticker.upper()
+    if t in FUNNY_DESCS:
+        return FUNNY_DESCS[t]
+    if original:
+        sentences = original.replace("。", "。|").replace(". ", ". |").split("|")
+        short = " ".join(s.strip() for s in sentences[:2] if s.strip())
+        return short if short else original[:200]
+    return ""
 
 def get_cn_name(ticker):
     return STOCK_NAMES.get(ticker.upper(), "")
@@ -151,10 +188,26 @@ div[class*="Toolbar"] { display:none !important; }
 .hot-price { font-size:1.05rem; font-weight:700; margin-top:0.25rem; }
 .pos { color:#00A86B; } .neg { color:#E53935; }
 
-/* 新聞 */
-.news-item { padding:0.85rem 0; border-bottom:1px solid #F0F1F3; }
-.news-title { font-size:0.85rem; font-weight:500; color:#111; line-height:1.5; }
-.news-meta  { font-size:0.72rem; color:#9CA3AF; margin-top:0.2rem; }
+/* 新聞列表項目按鈕 */
+.news-list-item button {
+    background:transparent !important; border:none !important;
+    border-bottom:1px solid #F0F1F3 !important; border-radius:0 !important;
+    text-align:left !important; padding:0.55rem 0.3rem !important;
+    color:#374151 !important; font-size:0.76rem !important;
+    white-space:pre-line !important; line-height:1.4 !important;
+    font-weight:400 !important; width:100% !important;
+    height:auto !important; min-height:0 !important;
+    box-shadow:none !important;
+}
+.news-list-item button:hover {
+    background:#F0F7FF !important; color:#2563EB !important;
+    border-bottom-color:#93C5FD !important;
+}
+.news-list-item-active button {
+    background:#EFF6FF !important; border-left:3px solid #3B82F6 !important;
+    color:#1D4ED8 !important; font-weight:600 !important;
+    padding-left:0.6rem !important;
+}
 
 .divider { border:none; border-top:1px solid #E8EAED; margin:1rem 0; }
 
@@ -297,28 +350,34 @@ def get_news(ticker):
     try:
         items = yf.Ticker(ticker).news or []
         result = []
-        for n in items[:10]:
-            # yfinance 新版格式：content 巢狀結構
+        for n in items[:12]:
             content = n.get("content") or {}
+            thumb = ""
             if content:
                 title     = content.get("title", "")
                 link      = (content.get("canonicalUrl") or {}).get("url", "#") or \
                             (content.get("clickThroughUrl") or {}).get("url", "#")
                 publisher = (content.get("provider") or {}).get("displayName", "")
                 pub_date  = content.get("pubDate", "")
+                img = content.get("thumbnail") or {}
+                if isinstance(img, dict):
+                    thumb = img.get("originalUrl") or img.get("url", "")
                 try:
                     t = datetime.fromisoformat(pub_date.replace("Z", "+00:00")).astimezone(tw_tz).replace(tzinfo=None)
                 except Exception:
                     t = datetime.now()
             else:
-                # 舊版格式
                 title     = n.get("title", "")
                 link      = n.get("link", "#")
                 publisher = n.get("publisher", "")
                 ts        = n.get("providerPublishTime", 0)
                 t         = datetime.fromtimestamp(ts) if ts else datetime.now()
+                raw_thumb = n.get("thumbnail") or {}
+                ress = raw_thumb.get("resolutions", [])
+                if ress:
+                    thumb = ress[-1].get("url", "")
             if title:
-                result.append({"title": title, "publisher": publisher, "link": link, "time": t})
+                result.append({"title": title, "publisher": publisher, "link": link, "time": t, "thumb": thumb})
         return result
     except Exception:
         return []
@@ -547,7 +606,7 @@ if "hold"   not in st.session_state: st.session_state.hold   = "3 個月"
 # ── 標題列：時間 + 自動更新提示 ──────────────────
 st.markdown(f"""
 <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem'>
-  <div style='font-size:1.3rem;font-weight:700;letter-spacing:-0.02em'>📋 Stock Verdict</div>
+  <div style='font-size:1.3rem;font-weight:700;letter-spacing:-0.02em'>💰 沅劭帶你賺大錢</div>
   <div style='text-align:right'>
     <div style='font-size:0.72rem;color:#9CA3AF;font-family:DM Mono,monospace'>🇹🇼 {now_tw.strftime('%H:%M:%S')}</div>
     <div style='font-size:0.62rem;color:#C4C9D4'>● 每 30 秒自動更新</div>
@@ -837,35 +896,69 @@ with tab_chart:
         st.warning(f"圖表錯誤：{e}")
 
 with tab_news:
-    col_n, col_f = st.columns([3,2])
+    col_n, col_f = st.columns([3, 2])
+
     with col_n:
-        st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.75rem'>近期新聞</div>", unsafe_allow_html=True)
-        with st.spinner("抓取新聞…"):
-            news_list = get_news(active)
-        if news_list:
-            news_html = ""
-            for n in news_list:
-                title = n['title']
-                link  = n['link']
-                pub   = n['publisher']
-                t_str = n['time'].strftime('%m/%d %H:%M')
-                news_html += f"""
-                <a href="{link}" target="_blank" style="text-decoration:none;display:block">
-                  <div style="padding:0.75rem 0;border-bottom:1px solid #F0F1F3;cursor:pointer">
-                    <div style="font-size:0.85rem;font-weight:500;color:#111;line-height:1.45;
-                                margin-bottom:0.25rem;
-                                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
-                                overflow:hidden">
-                        {title}
-                    </div>
-                    <div style="font-size:0.68rem;color:#9CA3AF">
-                        {pub}{"&nbsp;·&nbsp;" if pub else ""}{t_str}
-                    </div>
-                  </div>
-                </a>"""
-            st.markdown(f'<div style="padding:0 0.25rem">{news_html}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="color:#9CA3AF;font-size:0.85rem;padding:1rem 0">暫無新聞</div>', unsafe_allow_html=True)
+        _sel_key = f"news_sel_{active}"
+        if _sel_key not in st.session_state:
+            st.session_state[_sel_key] = 0
+
+        @st.fragment
+        def _news_panel():
+            with st.spinner("抓取新聞…"):
+                nl = get_news(active)
+            if not nl:
+                st.markdown('<div style="color:#9CA3AF;font-size:0.85rem;padding:1rem 0">暫無新聞</div>', unsafe_allow_html=True)
+                return
+            idx = min(st.session_state.get(_sel_key, 0), len(nl) - 1)
+            sel = nl[idx]
+
+            sub_list, sub_feat = st.columns([4, 6])
+
+            with sub_list:
+                st.markdown("<div style='font-size:0.62rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.3rem'>近期新聞</div>", unsafe_allow_html=True)
+                for i, n in enumerate(nl):
+                    is_sel = (i == idx)
+                    date_str = n["time"].strftime("%m/%d %H:%M")
+                    label = f"{n['title'][:42]}…\n{date_str}" if len(n["title"]) > 42 else f"{n['title']}\n{date_str}"
+                    cls = "news-list-item-active" if is_sel else "news-list-item"
+                    st.markdown(f'<div class="{cls}">', unsafe_allow_html=True)
+                    if st.button(label, key=f"nsel_{active}_{i}", use_container_width=True):
+                        st.session_state[_sel_key] = i
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            with sub_feat:
+                t_str = sel["time"].strftime("%Y/%m/%d %H:%M")
+                if sel.get("thumb"):
+                    st.markdown(f"""
+                    <div style="border-radius:12px;overflow:hidden;margin-bottom:0.75rem;
+                                border:1px solid #E8EAED;background:#F7F8FA">
+                        <img src="{sel['thumb']}" style="width:100%;height:190px;object-fit:cover;display:block">
+                    </div>""", unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div style="background:linear-gradient(135deg,#DBEAFE 0%,#EDE9FE 100%);
+                                border-radius:12px;height:190px;display:flex;align-items:center;
+                                justify-content:center;margin-bottom:0.75rem;
+                                border:1px solid #E8EAED">
+                        <span style="font-size:2.5rem">📰</span>
+                    </div>""", unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="font-size:0.9rem;font-weight:700;color:#111;
+                            line-height:1.5;margin-bottom:0.4rem">{sel['title']}</div>
+                <div style="font-size:0.68rem;color:#22C55E;margin-bottom:0.7rem">
+                    {(sel['publisher'] + ' · ') if sel.get('publisher') else ''}{t_str}
+                </div>""", unsafe_allow_html=True)
+                if sel.get("link") and sel["link"] != "#":
+                    st.markdown(f"""
+                    <a href="{sel['link']}" target="_blank" style="text-decoration:none">
+                        <div style="display:inline-block;background:#2563EB;color:#fff;
+                                    font-size:0.78rem;font-weight:600;padding:0.4rem 1rem;
+                                    border-radius:8px">🔗 閱讀全文</div>
+                    </a>""", unsafe_allow_html=True)
+
+        _news_panel()
 
     with col_f:
         st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.75rem'>財報指標</div>", unsafe_allow_html=True)
@@ -888,10 +981,10 @@ with tab_news:
                 fin_row("分析師評級", quote.get("rec","").upper() or "N/A"))
         st.markdown(f'<div class="card">{html}</div>', unsafe_allow_html=True)
 
-        desc = quote.get("desc","")
-        if desc:
-            with st.expander("公司簡介"):
-                st.markdown(f'<div style="font-size:0.8rem;color:#6B7280;line-height:1.8">{desc[:500]}…</div>', unsafe_allow_html=True)
+        funny = get_funny_desc(active, quote.get("desc", ""))
+        if funny:
+            with st.expander("📖 公司簡介（白話版）"):
+                st.markdown(f'<div style="font-size:0.82rem;color:#374151;line-height:1.9">{funny}</div>', unsafe_allow_html=True)
 
 with tab_trade:
     try:
