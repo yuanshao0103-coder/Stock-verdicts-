@@ -156,26 +156,46 @@ div[class*="Toolbar"] { display:none !important; }
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_quote(ticker):
+    t = yf.Ticker(ticker)
+    info = {}
     try:
-        info = yf.Ticker(ticker).info
-        price = info.get("currentPrice") or info.get("regularMarketPrice", 0) or 0
-        prev  = info.get("previousClose", price) or price
-        chg   = (price - prev) / prev * 100 if prev else 0
-        return {
-            "ok":True, "ticker":ticker.upper(),
-            "name":info.get("longName", ticker.upper()),
-            "cn_name":get_cn_name(ticker),
-            "price":price, "chg_pct":chg, "chg_abs":price-prev,
-            "volume":info.get("volume",0), "mkt_cap":info.get("marketCap",0),
-            "pe":info.get("trailingPE"), "pb":info.get("priceToBook"),
-            "eps":info.get("trailingEps"), "rev_growth":info.get("revenueGrowth"),
-            "sector":info.get("sector",""), "currency":info.get("currency","USD"),
-            "w52h":info.get("fiftyTwoWeekHigh",0), "w52l":info.get("fiftyTwoWeekLow",0),
-            "beta":info.get("beta",1.0), "desc":info.get("longBusinessSummary",""),
-            "target":info.get("targetMeanPrice"), "rec":info.get("recommendationKey",""),
-        }
-    except Exception as e:
-        return {"ok":False,"error":str(e)}
+        info = t.info or {}
+    except Exception:
+        pass
+
+    price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+    prev  = info.get("previousClose") or price
+
+    # .info 拿不到價格時用 fast_info 補
+    if not price:
+        try:
+            fi    = t.fast_info
+            price = float(fi.last_price or 0)
+            prev  = float(fi.previous_close or price)
+            if not info.get("currency"):
+                info["currency"] = getattr(fi, "currency", "TWD")
+            if not info.get("marketCap"):
+                info["marketCap"] = getattr(fi, "market_cap", 0) or 0
+        except Exception:
+            pass
+
+    if not price:
+        return {"ok": False, "error": "找不到價格"}
+
+    chg = (price - prev) / prev * 100 if prev else 0
+    return {
+        "ok": True, "ticker": ticker.upper(),
+        "name": info.get("longName", ticker.upper()),
+        "cn_name": get_cn_name(ticker),
+        "price": price, "chg_pct": chg, "chg_abs": price - prev,
+        "volume": info.get("volume", 0), "mkt_cap": info.get("marketCap", 0),
+        "pe": info.get("trailingPE"), "pb": info.get("priceToBook"),
+        "eps": info.get("trailingEps"), "rev_growth": info.get("revenueGrowth"),
+        "sector": info.get("sector", ""), "currency": info.get("currency", "USD"),
+        "w52h": info.get("fiftyTwoWeekHigh", 0), "w52l": info.get("fiftyTwoWeekLow", 0),
+        "beta": info.get("beta", 1.0), "desc": info.get("longBusinessSummary", ""),
+        "target": info.get("targetMeanPrice"), "rec": info.get("recommendationKey", ""),
+    }
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_history(ticker, period="1y"):
