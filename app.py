@@ -594,6 +594,11 @@ if "active" not in st.session_state: st.session_state.active = ""
 if "invest" not in st.session_state: st.session_state.invest = 10000
 if "hold"   not in st.session_state: st.session_state.hold   = "3 個月"
 
+# 卡片連結導航：?active=TICKER → session_state
+_qp_active = st.query_params.get("active", "")
+if _qp_active and not st.session_state.active:
+    st.session_state.active = _qp_active
+
 
 # ═══════════════════════════════════════════
 # 頂部：標題 + 搜尋列（永遠顯示）
@@ -632,6 +637,7 @@ def normalize_ticker(raw: str) -> str:
 
 if search_btn and search_val.strip():
     st.session_state.active = normalize_ticker(search_val)
+    st.query_params.clear()
     st.rerun()
 
 # ── 投資參數（可收合下拉）────────────────────────
@@ -662,34 +668,44 @@ if not st.session_state.active:
 
     tab_tw, tab_us, tab_screen = st.tabs(["🇹🇼  台股熱門", "🇺🇸  美股熱門", "🎯  自己選啦"])
 
-    ROW_COLORS = ["row-blue", "row-pink", "row-gold", "row-green", "row-purple"]
+    _ROW_BORDERS = ["#93C5FD", "#F9A8D4", "#FCD34D", "#86EFAC", "#C4B5FD"]
 
     def render_grid(tickers):
         with st.spinner("載入行情…"):
             stocks = load_stocks(tickers)
         rows = [stocks[i:i+2] for i in range(0, len(stocks), 2)]
         for row_idx, pair in enumerate(rows):
-            row_cls = ROW_COLORS[row_idx % len(ROW_COLORS)]
+            bdr = _ROW_BORDERS[row_idx % len(_ROW_BORDERS)]
             cols = st.columns(2)
             for col, q in zip(cols, pair):
-                chg    = q["chg_pct"]
-                arrow  = "▲" if chg >= 0 else "▼"
-                cn     = q.get("cn_name", "")
-                cur    = q.get("currency", "TWD")
-                risk   = get_quick_risk_status(q["ticker"])
-                chg_sym = "+" if chg >= 0 else ""
-                label = (
-                    f"{risk['emoji']} {risk['label']}\n"
-                    f"{q['ticker']}  {cn}\n"
-                    f"{cur} {q['price']:,.1f}\n"
-                    f"{arrow} {abs(chg):.2f}%"
-                )
+                chg   = q["chg_pct"]
+                arrow = "▲" if chg >= 0 else "▼"
+                cn    = q.get("cn_name", "")
+                cur   = q.get("currency", "TWD")
+                risk  = get_quick_risk_status(q["ticker"])
+                ticker_disp = q["ticker"].replace(".TW", "")
+                chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
-                    st.markdown(f'<div class="grid-card-btn {row_cls}">', unsafe_allow_html=True)
-                    if st.button(label, key=f"btn_{q['ticker']}", use_container_width=True):
-                        st.session_state.active = q["ticker"]
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <a href="?active={q['ticker']}" style="text-decoration:none;display:block;margin-bottom:0.3rem">
+                      <div style="background:#fff;border:2px solid {bdr};border-radius:14px;
+                                  padding:0.85rem 1rem;min-height:108px;
+                                  transition:box-shadow 0.15s,transform 0.12s">
+                        <div style="font-size:0.67rem;font-weight:600;color:{risk['color']};margin-bottom:0.28rem">
+                          {risk['emoji']} {risk['label']}
+                        </div>
+                        <div style="font-size:0.86rem;font-weight:700;color:#111;margin-bottom:0.12rem">
+                          {ticker_disp}&nbsp;<span style="font-weight:400;color:#6B7280;font-size:0.78rem">{cn}</span>
+                        </div>
+                        <div style="font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;
+                                    color:#111;margin-bottom:0.06rem">
+                          {cur} {q['price']:,.1f}
+                        </div>
+                        <div style="font-size:0.83rem;font-weight:600;color:{chg_color}">
+                          {arrow} {abs(chg):.2f}%
+                        </div>
+                      </div>
+                    </a>""", unsafe_allow_html=True)
 
     with tab_tw:
         render_grid(TW_TICKERS)
@@ -710,6 +726,7 @@ active = st.session_state.active
 # 返回按鈕
 if st.button("← 返回首頁"):
     st.session_state.active = ""
+    st.query_params.clear()
     st.rerun()
 
 with st.spinner(f"分析 {active} 中…"):
