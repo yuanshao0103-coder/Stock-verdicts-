@@ -486,13 +486,22 @@ def render_stock_screener():
         st.session_state.my_watchlist = []
     if "screener_gen" not in st.session_state:
         st.session_state.screener_gen = 0
+    if "screener_panel_open" not in st.session_state:
+        st.session_state.screener_panel_open = True
 
     n_selected   = len(st.session_state.screener_selected)
     has_screened = st.session_state.get("has_screened", False)
+    panel_open   = st.session_state.screener_panel_open
 
-    # ── 條件選擇區（expander 只包含 toggles，不包含按鈕）──
-    label = f"🔍 選股篩選（已選 {n_selected} 項）" if n_selected else "🔍 選股篩選"
-    with st.expander(label, expanded=True):
+    # ── 自製可收合標題列（完全由 session_state 控制，不用 st.expander）──
+    arrow = "▲" if panel_open else "▼"
+    label = f"🔍 選股篩選（已選 {n_selected} 項）  {arrow}" if n_selected else f"🔍 選股篩選  {arrow}"
+    if st.button(label, use_container_width=True, key="screener_toggle_btn"):
+        st.session_state.screener_panel_open = not panel_open
+        st.rerun()
+
+    if panel_open:
+        st.markdown('<div style="border:1px solid #E8EAED;border-radius:12px;padding:1rem;margin-bottom:0.5rem">', unsafe_allow_html=True)
         main_tabs = st.tabs([f"  {name}  " for name in SCREENER_OPTIONS.keys()])
         for tab, (main_name, sub_dict) in zip(main_tabs, SCREENER_OPTIONS.items()):
             with tab:
@@ -504,8 +513,9 @@ def render_stock_screener():
             f"目前已勾選 <span class='cond-count'>{n_selected}</span> 項條件</div>",
             unsafe_allow_html=True,
         )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── 按鈕在 expander 外，清除不會影響 expander 開合 ──
+    # ── 按鈕區 ──
     st.markdown('<div class="run-screen">', unsafe_allow_html=True)
     run = st.button("執行篩選 🚀", use_container_width=True, key="run_screener")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -518,6 +528,7 @@ def render_stock_screener():
         st.session_state.my_watchlist = watchlist
         if active is not None:
             st.session_state.active = active
+        st.session_state.screener_panel_open = True   # 清除後確保選單重新展開
         st.rerun(scope="app")
 
     if run:
