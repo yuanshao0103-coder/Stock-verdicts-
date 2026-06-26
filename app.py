@@ -161,7 +161,7 @@ div[class*="Toolbar"] { display:none !important; }
     text-align:left !important;
     padding:1rem 1.1rem !important;
     height:auto !important;
-    min-height:130px !important;
+    min-height:108px !important;
     color:#111 !important;
     white-space:pre-line !important;
     line-height:1.7 !important;
@@ -577,13 +577,13 @@ def get_quick_risk_status(ticker: str) -> dict:
         risks = check_risks(quote, df)
 
         if any(r["level"] == "danger" for r in risks):
-            return {"emoji": "🔴", "label": "危險", "color": "#E53935"}
+            return {"emoji": "🔴", "label": "裂開", "color": "#E53935"}
         if any(r["level"] == "warn"   for r in risks):
-            return {"emoji": "🟡", "label": "中等", "color": "#F59E0B"}
-        return     {"emoji": "🟢", "label": "安全", "color": "#00A86B"}
+            return {"emoji": "🟡", "label": "普普", "color": "#F59E0B"}
+        return     {"emoji": "🟢", "label": "穩的ㄌㄚ", "color": "#00A86B"}
 
     except Exception:
-        return     {"emoji": "🟡", "label": "中等", "color": "#F59E0B"}
+        return     {"emoji": "🟡", "label": "普普", "color": "#F59E0B"}
 
 
 # ═══════════════════════════════════════════
@@ -677,14 +677,12 @@ if not st.session_state.active:
                 cn     = q.get("cn_name", "")
                 cur    = q.get("currency", "TWD")
                 risk   = get_quick_risk_status(q["ticker"])
-                mkt_cap = q.get("mkt_cap", 0)
-                cap_str = fmt_cap(mkt_cap, cur)
                 chg_sym = "+" if chg >= 0 else ""
                 label = (
-                    f"{risk['emoji']} {risk['label']}   {q['ticker']}\n"
-                    f"{cn}\n"
+                    f"{risk['emoji']} {risk['label']}\n"
+                    f"{q['ticker']}  {cn}\n"
                     f"{cur} {q['price']:,.1f}\n"
-                    f"{arrow} {abs(chg):.2f}%   {cap_str}"
+                    f"{arrow} {abs(chg):.2f}%"
                 )
                 with col:
                     st.markdown(f'<div class="grid-card-btn {row_cls}">', unsafe_allow_html=True)
@@ -1172,13 +1170,26 @@ with tab_trade:
                 avg_vol=("wk_vol", "mean")
             ).reset_index()
             _by_wk = _by_wk[_by_wk["week_num"].between(1, 52)].reset_index(drop=True)
-            _cur_wk = int(datetime.now().isocalendar()[1])
+            _cur_wk  = int(datetime.now().isocalendar()[1])
+            _cur_yr  = datetime.now().year
+            # 計算當年每週的開始日期（週一），用於 X 軸顯示
+            def _wk_date(w):
+                try:
+                    return datetime.strptime(f"{_cur_yr}-W{w:02d}-1", "%Y-W%W-%w").strftime("%-m/%-d")
+                except Exception:
+                    try:
+                        return datetime.strptime(f"{_cur_yr} {w} 1", "%Y %W %w").strftime("%m/%d")
+                    except Exception:
+                        return str(w)
+            _wk_dates = {int(w): _wk_date(int(w)) for w in _by_wk["week_num"]}
             _bar_clr = [
                 "#3B82F6" if int(w) == _cur_wk else
                 "#22C55E" if r > 0.55 else
                 "#F87171" if r < 0.45 else "#FCD34D"
                 for w, r in zip(_by_wk["week_num"], _by_wk["win_rate"])
             ]
+            # customdata 帶入日期字串，hover 直接用日期不用週號
+            _custom = [_wk_dates.get(int(w), str(w)) for w in _by_wk["week_num"]]
             _fig_w = go_w.Figure()
             _fig_w.add_trace(go_w.Bar(
                 x=_by_wk["week_num"],
@@ -1187,9 +1198,10 @@ with tab_trade:
                 marker_color=_bar_clr,
                 opacity=0.85,
                 yaxis="y",
-                hovertemplate="第%{x}週<br>獲利機率 %{y:.1f}%<extra></extra>",
+                customdata=_custom,
+                hovertemplate="%{customdata}<br>獲利機率 %{y:.1f}%<extra></extra>",
             ))
-            _vol_unit = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
+            _vol_unit  = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
             _vol_label = "千張" if _vol_unit == 1000 else "張"
             _fig_w.add_trace(go_w.Scatter(
                 x=_by_wk["week_num"],
@@ -1199,11 +1211,17 @@ with tab_trade:
                 marker=dict(size=5, color="#6366F1", symbol="circle"),
                 line=dict(color="#6366F1", width=1.8, dash="dot"),
                 yaxis="y2",
-                hovertemplate=f"第%{{x}}週<br>成交量 %{{y:,.0f}}{_vol_label}<extra></extra>",
+                customdata=_custom,
+                hovertemplate=f"%{{customdata}}<br>成交量 %{{y:,.0f}}{_vol_label}<extra></extra>",
             ))
             _fig_w.add_hline(y=50, line_width=1, line_dash="dash", line_color="#D1D5DB", yref="y",
                              annotation_text="50%", annotation_position="right",
                              annotation_font_size=9, annotation_font_color="#9CA3AF")
+            # 顯示週號對應的日期，每 4 週一個刻度 + 當週
+            _tick_wks = sorted(set(
+                [w for w in _by_wk["week_num"] if int(w) % 4 == 0 or int(w) == 1 or int(w) == _cur_wk]
+            ))
+            _upd_date = datetime.now(tw_tz).strftime("%Y/%m/%d 更新")
             _fig_w.update_layout(
                 height=240,
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -1211,12 +1229,16 @@ with tab_trade:
                 margin=dict(l=0, r=55, t=28, b=10),
                 legend=dict(orientation="h", yanchor="bottom", y=1.0,
                             bgcolor="rgba(0,0,0,0)", font_size=10, x=0),
+                title=dict(text=f"<span style='font-size:9px;color:#9CA3AF'>{_upd_date}</span>",
+                           x=1, xanchor="right", y=0.97, yanchor="top"),
                 xaxis=dict(
                     title=None, gridcolor="#F5F5F5",
                     tickmode="array",
-                    tickvals=[w for w in _by_wk["week_num"] if w % 4 == 0 or w == 1 or w == _cur_wk],
-                    ticktext=[f"第{w}週{'⬅' if w==_cur_wk else ''}"
-                              for w in _by_wk["week_num"] if w % 4 == 0 or w == 1 or w == _cur_wk],
+                    tickvals=_tick_wks,
+                    ticktext=[
+                        f"{'📍' if int(w)==_cur_wk else ''}{_wk_dates.get(int(w), str(w))}"
+                        for w in _tick_wks
+                    ],
                     tickfont=dict(size=10),
                 ),
                 yaxis=dict(
