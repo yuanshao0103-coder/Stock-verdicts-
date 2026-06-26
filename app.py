@@ -23,7 +23,7 @@ now_tw = datetime.now(tw_tz)
 
 # ── 每 30 秒自動刷新（JS 計時器，避免 yfinance 限流）──
 st.markdown(
-    "<script>setTimeout(function(){window.parent.location.reload();}, 30000);</script>",
+    "<script>setTimeout(function(){window.parent.location.reload();}, 300000);</script>",
     unsafe_allow_html=True,
 )
 
@@ -154,7 +154,7 @@ div[class*="Toolbar"] { display:none !important; }
 # 工具函數
 # ═══════════════════════════════════════════
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_quote(ticker):
     try:
         info = yf.Ticker(ticker).info
@@ -350,7 +350,7 @@ def fmt_cap(v, currency="USD"):
 US_TICKERS = ["TSM","NVDA","AAPL","MSFT","AMZN","META","AMD","TSLA"]
 TW_TICKERS = ["2330.TW","2317.TW","2454.TW","2308.TW","2881.TW","2882.TW","2303.TW","3008.TW"]
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_stocks(tickers):
     out = []
     for t in tickers:
