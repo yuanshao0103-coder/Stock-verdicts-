@@ -1056,59 +1056,93 @@ with tab_trade:
         # ── 量能比 ───────────────────────────────────────
         vol_ratio = float(vol_t.tail(5).mean() / vol_t.tail(60).mean()) if len(vol_t) >= 60 else 1.0
 
-        # ── 操盤評分 ─────────────────────────────────────
+        # ── 綜合時機評分（沅劭模型）──────────────────────
         score = 0
         reasons = []
+
+        # RSI
         if cur_rsi < 35:
-            score += 3; reasons.append(f"RSI {cur_rsi:.0f} 超賣區，籌碼洗乾淨")
+            score += 3
+            reasons.append(f"📉 RSI 只剩 {cur_rsi:.0f}，超賣爆了，市場把它踩到地板，反彈機率超高")
         elif cur_rsi < 50:
-            score += 1; reasons.append(f"RSI {cur_rsi:.0f} 中性偏低")
-        elif cur_rsi > 70:
-            score -= 2; reasons.append(f"RSI {cur_rsi:.0f} 過熱，追高風險大")
+            score += 1
+            reasons.append(f"📊 RSI {cur_rsi:.0f}，溫度剛好，還沒過熱，還有上漲空間")
+        elif cur_rsi < 65:
+            reasons.append(f"📊 RSI {cur_rsi:.0f}，正常區間，不算熱也不算冷")
+        else:
+            score -= 2
+            reasons.append(f"🔥 RSI 衝到 {cur_rsi:.0f}！過熱了，散戶都追進去了你現在才要買？")
 
+        # 年線
         if above_ma:
-            score += 1; reasons.append("站穩年線，長期趨勢向上")
+            score += 1
+            reasons.append(f"📈 站穩 200 日均線（年線），多頭格局還在，長期趨勢向上")
         else:
-            score -= 1; reasons.append("跌破年線，趨勢偏弱")
+            score -= 1
+            reasons.append(f"📉 跌破 200 日均線（年線），趨勢已爛，現在抄底要先問清楚底在哪")
 
+        # 52W 位置
         if price_pct_in_range < 25:
-            score += 2; reasons.append(f"股價接近年低（年內 {price_pct_in_range:.0f}% 位置）")
+            score += 2
+            reasons.append(f"💰 股價在年內低位 {price_pct_in_range:.0f}%，相對便宜，長線佈局的好時機")
         elif price_pct_in_range > 80:
-            score -= 1; reasons.append(f"股價靠近年高（年內 {price_pct_in_range:.0f}% 位置）")
-
-        win_r = mc["win"]
-        if win_r >= 72: score += 2
-        elif win_r >= 60: score += 1
-        elif win_r < 45: score -= 2
-
-        if vol_ratio >= 2.0:
-            score -= 1; reasons.append(f"爆量 {vol_ratio:.1f}x，主力可能出貨")
-        elif vol_ratio < 0.6:
-            score += 1; reasons.append("縮量盤整，蓄勢待發")
-
-        # ── 總結 ─────────────────────────────────────────
-        if score >= 4:
-            verdict_label = "✅ 可以進場"
-            verdict_color = "#00A86B"
-            verdict_bg    = "rgba(0,168,107,0.07)"
-            verdict_sub   = "多項指標同時看好，時機成熟"
-        elif score >= 1:
-            verdict_label = "⏳ 等待更好時機"
-            verdict_color = "#F59E0B"
-            verdict_bg    = "rgba(245,158,11,0.07)"
-            verdict_sub   = "條件尚未全部到位，可列入觀察"
+            score -= 1
+            reasons.append(f"⚠️ 股價在年內高位 {price_pct_in_range:.0f}%，現在追進去是在接刀，小心")
         else:
-            verdict_label = "🚫 暫時避開"
-            verdict_color = "#E53935"
-            verdict_bg    = "rgba(229,57,53,0.07)"
-            verdict_sub   = "多項指標偏空，等反轉信號再說"
+            reasons.append(f"📍 股價在年內中段 {price_pct_in_range:.0f}%，不算貴也不算便宜，可觀察")
 
+        # Monte Carlo 模擬
+        win_r = mc["win"]
+        if win_r >= 72:
+            score += 2
+            reasons.append(f"🎯 電腦模擬 8,000 條路徑，{win_r:.0f}% 都在漲，勝算大到笑出來")
+        elif win_r >= 60:
+            score += 1
+            reasons.append(f"🎲 模擬勝率 {win_r:.0f}%，偏多，但還不到必勝的程度")
+        elif win_r < 45:
+            score -= 2
+            reasons.append(f"💸 模擬跑出來 {win_r:.0f}% 都在跌，贏少輸多，這個時間點不好")
+        else:
+            reasons.append(f"⚖️ 模擬勝率 {win_r:.0f}%，五五波，丟硬幣決定也差不多")
+
+        # 成交量
+        if vol_ratio >= 2.0:
+            score -= 1
+            reasons.append(f"📦 最近成交量暴增到平時的 {vol_ratio:.1f} 倍，主力可能在倒貨給散戶，注意")
+        elif vol_ratio < 0.6:
+            score += 1
+            reasons.append(f"🤫 成交量縮到只剩 {vol_ratio:.1f} 倍，市場在醞釀，大波動快來了")
+        else:
+            reasons.append(f"〰️ 成交量正常（{vol_ratio:.1f} 倍），籌碼穩定，沒有異常跡象")
+
+        # ── 最終判決 ─────────────────────────────────────
+        if score >= 4:
+            verdict_label = "🔥 投爆"
+            verdict_color = "#00A86B"
+            verdict_bg    = "rgba(0,168,107,0.06)"
+        elif score >= 1:
+            verdict_label = "🤔 先緩緩"
+            verdict_color = "#F59E0B"
+            verdict_bg    = "rgba(245,158,11,0.06)"
+        else:
+            verdict_label = "💀 做空等死"
+            verdict_color = "#E53935"
+            verdict_bg    = "rgba(229,57,53,0.06)"
+
+        _reasons_html = "".join(
+            f'<div style="font-size:0.79rem;color:#374151;padding:0.22rem 0;'
+            f'border-bottom:1px solid rgba(0,0,0,0.04);line-height:1.5">{r}</div>'
+            for r in reasons
+        )
         st.markdown(f"""
-        <div style="background:{verdict_bg};border:1.5px solid {verdict_color}33;border-radius:12px;
-                    padding:1rem 1.25rem;margin-bottom:1rem">
-            <div style="font-size:1.15rem;font-weight:700;color:{verdict_color}">{verdict_label}</div>
-            <div style="font-size:0.78rem;color:#6B7280;margin-top:0.2rem">{verdict_sub}</div>
-            <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">{'　·　'.join(reasons[:3])}</div>
+        <div style="background:{verdict_bg};border-left:4px solid {verdict_color};
+                    border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem">
+            <div style="font-size:1.5rem;font-weight:800;color:{verdict_color};
+                        letter-spacing:-0.02em;margin-bottom:0.55rem">{verdict_label}</div>
+            <div style="font-size:0.62rem;color:#9CA3AF;font-weight:700;
+                        letter-spacing:0.07em;text-transform:uppercase;
+                        margin-bottom:0.4rem">沅劭模型判斷依據</div>
+            {_reasons_html}
         </div>
         """, unsafe_allow_html=True)
 
