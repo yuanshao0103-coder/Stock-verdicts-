@@ -193,15 +193,38 @@ def get_quote(ticker):
 
     chg = (price - prev) / prev * 100 if prev else 0
 
-    # ── 3. 52W 高低：.info 沒有就從歷史資料算 ──
+    # ── 3. 52W 高低 + PE：.info 沒有就從歷史／財報自己算 ──
     w52h = info.get("fiftyTwoWeekHigh") or 0
     w52l = info.get("fiftyTwoWeekLow") or 0
-    if not w52h:
+    pe_val  = info.get("trailingPE")
+    eps_val = info.get("trailingEps")
+
+    hist = None
+    try:
+        hist = t.history(period="1y", auto_adjust=True)
+    except Exception:
+        pass
+
+    if not w52h and hist is not None and not hist.empty:
+        w52h = float(hist["High"].max())
+        w52l = float(hist["Low"].min())
+
+    # PE fallback：用季度財報算 TTM EPS → price / EPS
+    if pe_val is None and price > 0:
         try:
-            hist = t.history(period="1y", auto_adjust=True)
-            if not hist.empty:
-                w52h = float(hist["High"].max())
-                w52l = float(hist["Low"].min())
+            shares = getattr(fi, "shares", 0) or 0
+            if shares > 0:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    q_stmt = ex.submit(lambda: t.quarterly_income_stmt).result(timeout=10)
+                if q_stmt is not None and not q_stmt.empty:
+                    for row_name in q_stmt.index:
+                        label = str(row_name)
+                        if "Net Income" in label and "Minority" not in label and "Noncontrolling" not in label:
+                            ttm_ni = float(q_stmt.loc[row_name].iloc[:4].sum())
+                            if ttm_ni > 0:
+                                eps_val = ttm_ni / shares
+                                pe_val  = price / eps_val
+                            break
         except Exception:
             pass
 
@@ -213,8 +236,8 @@ def get_quote(ticker):
         "cn_name": get_cn_name(ticker),
         "price": price, "chg_pct": chg, "chg_abs": price - prev,
         "volume": info.get("volume", 0), "mkt_cap": mkt_cap,
-        "pe": info.get("trailingPE"), "pb": info.get("priceToBook"),
-        "eps": info.get("trailingEps"), "rev_growth": info.get("revenueGrowth"),
+        "pe": pe_val, "pb": info.get("priceToBook"),
+        "eps": eps_val, "rev_growth": info.get("revenueGrowth"),
         "sector": info.get("sector", ""), "currency": currency,
         "w52h": w52h, "w52l": w52l,
         "beta": info.get("beta", 1.0), "desc": info.get("longBusinessSummary", ""),
