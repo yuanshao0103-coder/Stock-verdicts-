@@ -277,9 +277,9 @@ def check_risks(quote, df):
     if eps is not None and eps < 0:
         risks.append({"level": "warn",
             "msg": f"⚠️ 基本面風險：EPS 為負（{eps:.2f}），公司目前尚未獲利"})
-    elif pe is None or pe <= 0:
+    elif pe is not None and pe <= 0:
         risks.append({"level": "warn",
-            "msg": "⚠️ 基本面風險：P/E Ratio 為 N/A 或負數，獲利能力存疑"})
+            "msg": "⚠️ 基本面風險：P/E Ratio 為負數，獲利能力存疑"})
 
     # ══════════════════════════════════════════════════════
     # 防線 2：高波動 / Beta
@@ -327,7 +327,7 @@ def check_risks(quote, df):
     currency = quote.get("currency", "USD")
     # 統一換算成美元比較（台幣約 1 USD = 32 TWD）
     mkt_cap_usd = mkt_cap / 32 if currency == "TWD" else mkt_cap
-    if mkt_cap_usd and mkt_cap_usd > 1e12 and (pe is None or pe <= 0):
+    if mkt_cap_usd and mkt_cap_usd > 1e12 and pe is not None and pe <= 0:
         risks.append({"level": "danger",
             "msg": "市值超過 1 兆美元但尚未獲利（P/E 為負），"
                    "屬於高風險成長股，估值泡沫風險高"})
