@@ -463,9 +463,9 @@ def _inject_screener_css():
     st.markdown("""
     <style>
     .screener-sub div[role="radiogroup"] { flex-direction:row !important; flex-wrap:wrap !important; gap:0.4rem !important; }
-    .cond-count { display:inline-block; background:#DBEAFE; color:#1D4ED8; border-radius:20px; padding:2px 12px; font-size:0.75rem; font-weight:700; }
-    .cond-mock  { display:inline-block; background:#FEF3C7; color:#92400E; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
-    .cond-real  { display:inline-block; background:#D1FAE5; color:#065F46; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
+    .cond-count { display:inline-block; background:rgba(37,99,235,0.25); color:#93C5FD; border-radius:20px; padding:2px 12px; font-size:0.75rem; font-weight:700; }
+    .cond-mock  { display:inline-block; background:rgba(251,191,36,0.2); color:#FCD34D; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
+    .cond-real  { display:inline-block; background:rgba(16,185,129,0.2); color:#6EE7B7; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
     .run-screen button { background:linear-gradient(135deg,#2563EB,#1D4ED8) !important; color:#FFF !important; font-size:1rem !important; font-weight:700 !important; padding:0.85rem !important; border-radius:12px !important; box-shadow:0 4px 16px rgba(37,99,235,0.25) !important; }
     .result-head { font-size:0.95rem; font-weight:700; margin:1.25rem 0 0.75rem; display:flex; align-items:center; gap:0.5rem; }
     </style>
