@@ -351,11 +351,27 @@ US_TICKERS = ["TSM","NVDA","AAPL","MSFT","AMZN","META","AMD","TSLA"]
 TW_TICKERS = ["2330.TW","2317.TW","2454.TW","2308.TW","2881.TW","2882.TW","2303.TW","3008.TW"]
 
 @st.cache_data(ttl=300, show_spinner=False)
+def get_fast_quote(ticker: str) -> dict:
+    """首頁卡片用：只抓價格，速度快。"""
+    try:
+        fi = yf.Ticker(ticker).fast_info
+        price = float(fi.last_price or 0)
+        prev  = float(fi.previous_close or price)
+        chg   = (price - prev) / prev * 100 if prev else 0.0
+        cur   = getattr(fi, "currency", "TWD")
+        return {"ok": True, "ticker": ticker, "price": price,
+                "chg_pct": chg, "currency": cur,
+                "cn_name": get_cn_name(ticker)}
+    except Exception:
+        return {"ok": False}
+
+@st.cache_data(ttl=300, show_spinner=False)
 def load_stocks(tickers):
     out = []
     for t in tickers:
-        q = get_quote(t)
-        if q.get("ok") and q["price"]>0: out.append(q)
+        q = get_fast_quote(t)
+        if q.get("ok") and q["price"] > 0:
+            out.append(q)
     return out
 
 
@@ -465,20 +481,11 @@ if not st.session_state.active:
             color = "pos" if chg>=0 else "neg"
             arrow = "▲" if chg>=0 else "▼"
             cn    = q.get("cn_name","")
-            cur   = q.get("currency","USD")
-            risk  = get_quick_risk_status(q["ticker"])
-            r_emoji = risk["emoji"]
-            r_label = risk["label"]
-            r_color = risk["color"]
+            cur   = q.get("currency","TWD")
             st.markdown(f"""
             <div class="hot-chip">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start">
                     <div>
-                        <span style="font-size:0.72rem;font-weight:700;color:{r_color};
-                              background:{'rgba(0,168,107,0.08)' if r_label=='安全' else 'rgba(245,158,11,0.08)' if r_label=='中等' else 'rgba(229,57,53,0.08)'};
-                              border-radius:4px;padding:1px 5px;margin-right:4px;white-space:nowrap">
-                            {r_emoji} {r_label}
-                        </span>
                         <span class="hot-ticker">{q['ticker']}</span>
                         {"&nbsp;<span class='hot-cn'>"+cn+"</span>" if cn else ""}
                     </div>
@@ -487,7 +494,6 @@ if not st.session_state.active:
                         <div class="{color}" style="font-size:0.8rem;font-weight:600">{arrow} {abs(chg):.2f}%</div>
                     </div>
                 </div>
-                <div style="font-size:0.68rem;color:#C4C9D4;margin-top:0.3rem">{fmt_cap(q['mkt_cap'], q.get('currency','USD'))}</div>
             </div>
             """, unsafe_allow_html=True)
             if st.button(f"分析 {q['ticker']}", key=f"btn_{q['ticker']}", use_container_width=True):
