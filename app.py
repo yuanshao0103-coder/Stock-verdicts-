@@ -205,6 +205,8 @@ def get_quote(ticker):
         except Exception:
             pass
 
+    fetched_at = datetime.now(tw_tz).strftime("%Y-%m-%d %H:%M:%S")
+
     return {
         "ok": True, "ticker": ticker.upper(),
         "name": info.get("longName", ticker.upper()),
@@ -217,6 +219,7 @@ def get_quote(ticker):
         "w52h": w52h, "w52l": w52l,
         "beta": info.get("beta", 1.0), "desc": info.get("longBusinessSummary", ""),
         "target": info.get("targetMeanPrice"), "rec": info.get("recommendationKey", ""),
+        "fetched_at": fetched_at,
     }
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -630,6 +633,7 @@ cur  = quote.get("currency","USD")
 pc   = "#00A86B" if chg>=0 else "#E53935"
 arrow= "▲" if chg>=0 else "▼"
 
+fetched_at = quote.get("fetched_at", "")
 st.markdown(f"""
 <div style="margin-bottom:0.75rem">
     <div style="font-size:0.72rem;color:#9CA3AF;font-weight:600;letter-spacing:0.06em;text-transform:uppercase">{quote.get('sector','') or '股票'} · {cur}</div>
@@ -638,6 +642,7 @@ st.markdown(f"""
         <span style="font-family:'DM Mono',monospace;font-size:1.8rem;font-weight:600;color:{pc}">{cur} {price:,.2f}</span>
         <span style="font-size:0.9rem;font-weight:600;color:{pc}">{arrow} {abs(chg):.2f}%</span>
     </div>
+    {"<div style='font-size:0.65rem;color:#C4C9D4;margin-top:0.2rem'>🕐 資料擷取時間："+fetched_at+" (台灣時間)</div>" if fetched_at else ""}
 </div>
 """, unsafe_allow_html=True)
 
