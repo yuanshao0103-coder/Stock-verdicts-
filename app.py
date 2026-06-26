@@ -286,11 +286,31 @@ def get_history(ticker, period="1y"):
 def get_news(ticker):
     try:
         items = yf.Ticker(ticker).news or []
-        return [{"title":n.get("title",""),"publisher":n.get("publisher",""),
-                 "link":n.get("link","#"),
-                 "time":datetime.fromtimestamp(n.get("providerPublishTime",0))}
-                for n in items[:10]]
-    except:
+        result = []
+        for n in items[:10]:
+            # yfinance 新版格式：content 巢狀結構
+            content = n.get("content") or {}
+            if content:
+                title     = content.get("title", "")
+                link      = (content.get("canonicalUrl") or {}).get("url", "#") or \
+                            (content.get("clickThroughUrl") or {}).get("url", "#")
+                publisher = (content.get("provider") or {}).get("displayName", "")
+                pub_date  = content.get("pubDate", "")
+                try:
+                    t = datetime.fromisoformat(pub_date.replace("Z", "+00:00")).astimezone(tw_tz).replace(tzinfo=None)
+                except Exception:
+                    t = datetime.now()
+            else:
+                # 舊版格式
+                title     = n.get("title", "")
+                link      = n.get("link", "#")
+                publisher = n.get("publisher", "")
+                ts        = n.get("providerPublishTime", 0)
+                t         = datetime.fromtimestamp(ts) if ts else datetime.now()
+            if title:
+                result.append({"title": title, "publisher": publisher, "link": link, "time": t})
+        return result
+    except Exception:
         return []
 
 def run_mc(close, hold_days, n=8000):
@@ -817,16 +837,29 @@ with tab_news:
         with st.spinner("抓取新聞…"):
             news_list = get_news(active)
         if news_list:
+            news_html = ""
             for n in news_list:
-                st.markdown(f"""
-                <div class="news-item">
-                    <a href="{n['link']}" target="_blank" style="text-decoration:none">
-                        <div class="news-title">{n['title']}</div>
-                    </a>
-                    <div class="news-meta">{n['publisher']} · {n['time'].strftime('%m/%d %H:%M')}</div>
-                </div>""", unsafe_allow_html=True)
+                title = n['title']
+                link  = n['link']
+                pub   = n['publisher']
+                t_str = n['time'].strftime('%m/%d %H:%M')
+                news_html += f"""
+                <a href="{link}" target="_blank" style="text-decoration:none;display:block">
+                  <div style="padding:0.75rem 0;border-bottom:1px solid #F0F1F3;cursor:pointer">
+                    <div style="font-size:0.85rem;font-weight:500;color:#111;line-height:1.45;
+                                margin-bottom:0.25rem;
+                                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+                                overflow:hidden">
+                        {title}
+                    </div>
+                    <div style="font-size:0.68rem;color:#9CA3AF">
+                        {pub}{"&nbsp;·&nbsp;" if pub else ""}{t_str}
+                    </div>
+                  </div>
+                </a>"""
+            st.markdown(f'<div style="padding:0 0.25rem">{news_html}</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div style="color:#9CA3AF;font-size:0.85rem">暫無新聞</div>', unsafe_allow_html=True)
+            st.markdown('<div style="color:#9CA3AF;font-size:0.85rem;padding:1rem 0">暫無新聞</div>', unsafe_allow_html=True)
 
     with col_f:
         st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.75rem'>財報指標</div>", unsafe_allow_html=True)
