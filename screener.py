@@ -516,16 +516,15 @@ def render_stock_screener():
         run = st.button("執行篩選 🚀", use_container_width=True, key="run_screener")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if n_selected > 0:
-            if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
-                st.session_state.screener_selected = set()
-                st.session_state.has_screened = False
-                st.session_state.pop("last_screen_sig", None)
-                st.session_state.pop("active_screen_conditions", None)
-                st.session_state.pop("last_screen_df", None)
-                st.session_state.pop("last_screen_real_labels", None)
-                st.session_state.pop("last_screen_mock_labels", None)
-                st.rerun()
+        if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
+            st.session_state.screener_selected = set()
+            st.session_state.has_screened = False
+            for k in ["last_screen_sig", "active_screen_conditions",
+                      "last_screen_df", "last_screen_real_labels", "last_screen_mock_labels"]:
+                st.session_state.pop(k, None)
+            for k in [k for k in st.session_state if k.startswith("tg_")]:
+                del st.session_state[k]
+            st.rerun()
 
         if run:
             if n_selected == 0:
