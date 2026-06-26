@@ -115,26 +115,28 @@ div[class*="Toolbar"] { display:none !important; }
 .alert-safe   { background:#F0FDF4; border:1.5px solid #00A86B; border-radius:10px; padding:0.75rem 1rem; color:#166534; font-size:0.82rem; font-weight:500; }
 .alert-warn   { background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:10px; padding:0.85rem 1.1rem; color:#92400E; font-size:0.82rem; font-weight:500; line-height:1.6; }
 
-/* 股票卡 */
-.hot-chip { background:#fff; border:1px solid #E8EAED; border-radius:12px 12px 0 0; padding:0.85rem 1rem 0.7rem; }
+/* 股票卡（整張卡片 = 按鈕） */
 .hot-ticker { font-family:'DM Mono',monospace; font-size:0.88rem; font-weight:600; color:#0A66C2; }
 .hot-cn { font-size:0.72rem; color:#9CA3AF; }
-/* 卡片底部按鈕 */
-.card-btn-wrap + div[data-testid="stButton"] > button {
-    background:#F0F4FF !important;
+.grid-card-btn > div > button {
+    background:#fff !important;
     border:1px solid #E8EAED !important;
-    border-top:none !important;
-    border-radius:0 0 12px 12px !important;
-    color:#2563EB !important;
-    font-size:0.78rem !important;
-    font-weight:600 !important;
-    padding:0.4rem 1rem !important;
-    margin-top:0 !important;
-    transition:background 0.15s !important;
+    border-radius:12px !important;
+    text-align:left !important;
+    padding:0.85rem 1rem !important;
+    height:auto !important;
+    min-height:100px !important;
+    color:#111 !important;
+    white-space:pre-line !important;
+    line-height:1.6 !important;
+    transition:box-shadow 0.15s, border-color 0.15s !important;
     box-shadow:none !important;
+    width:100% !important;
 }
-.card-btn-wrap + div[data-testid="stButton"] > button:hover {
-    background:#DBEAFE !important;
+.grid-card-btn > div > button:hover {
+    border-color:#93C5FD !important;
+    box-shadow:0 2px 12px rgba(37,99,235,0.10) !important;
+    background:#FAFBFF !important;
 }
 .hot-price { font-size:1.05rem; font-weight:700; margin-top:0.25rem; }
 .pos { color:#00A86B; } .neg { color:#E53935; }
@@ -595,30 +597,20 @@ if not st.session_state.active:
                 mkt_cap = q.get("mkt_cap", 0)
                 pc      = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
-                    st.markdown(f"""
-                    <div class="hot-chip">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-                            <div>
-                                <span style="font-size:0.65rem;font-weight:700;color:{r_color};
-                                      background:{'rgba(0,168,107,0.08)' if r_label=='安全' else 'rgba(245,158,11,0.08)' if r_label=='中等' else 'rgba(229,57,53,0.08)'};
-                                      border-radius:4px;padding:1px 5px;white-space:nowrap">
-                                    {r_emoji} {r_label}
-                                </span><br>
-                                <span class="hot-ticker">{q['ticker']}</span>
-                                {"<br><span class='hot-cn'>"+cn+"</span>" if cn else ""}
-                            </div>
-                            <div style="text-align:right">
-                                <div style="font-family:'DM Mono',monospace;font-size:0.95rem;font-weight:700;color:{pc}">{q['price']:,.1f}</div>
-                                <div style="font-size:0.75rem;font-weight:600;color:{pc}">{arrow}{abs(chg):.2f}%</div>
-                                <div style="font-size:0.62rem;color:#94A3B8;margin-top:0.15rem">{fmt_cap(mkt_cap, cur)}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-btn-wrap"></div>
-                    """, unsafe_allow_html=True)
-                    if st.button("查看分析 →", key=f"btn_{q['ticker']}", use_container_width=True):
+                    chg_sign = "+" if chg >= 0 else ""
+                    cap_str  = fmt_cap(mkt_cap, cur)
+                    # 整張卡片 = 一個按鈕，點哪裡都有效
+                    label = (
+                        f"{r_emoji} {r_label}\n"
+                        f"{q['ticker']}  {cn}\n"
+                        f"{cur} {q['price']:,.1f}  {arrow}{abs(chg):.2f}%\n"
+                        f"{cap_str}"
+                    )
+                    st.markdown('<div class="grid-card-btn">', unsafe_allow_html=True)
+                    if st.button(label, key=f"btn_{q['ticker']}", use_container_width=True):
                         st.session_state.active = q["ticker"]
                         st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
 
     with tab_tw:
         render_grid(TW_TICKERS)
