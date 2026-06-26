@@ -116,16 +116,25 @@ div[class*="Toolbar"] { display:none !important; }
 .alert-warn   { background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:10px; padding:0.85rem 1.1rem; color:#92400E; font-size:0.82rem; font-weight:500; line-height:1.6; }
 
 /* 股票卡 */
-.hot-chip { background:#fff; border:1px solid #E8EAED; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.1rem; transition:box-shadow 0.15s,border-color 0.15s; }
-.hot-chip:hover { border-color:#2563EB44; box-shadow:0 2px 12px rgba(37,99,235,0.10); }
+.hot-chip { background:#fff; border:1px solid #E8EAED; border-radius:12px 12px 0 0; padding:0.85rem 1rem 0.7rem; }
 .hot-ticker { font-family:'DM Mono',monospace; font-size:0.88rem; font-weight:600; color:#0A66C2; }
 .hot-cn { font-size:0.72rem; color:#9CA3AF; }
-/* 卡片點擊：透明按鈕覆蓋 */
-.card-clickable { position:relative; }
-.card-clickable + div[data-testid="stButton"] > button {
-    position:absolute; inset:0; width:100%; height:100%;
-    opacity:0; cursor:pointer; z-index:5;
-    border-radius:12px;
+/* 卡片底部按鈕 */
+.card-btn-wrap + div[data-testid="stButton"] > button {
+    background:#F0F4FF !important;
+    border:1px solid #E8EAED !important;
+    border-top:none !important;
+    border-radius:0 0 12px 12px !important;
+    color:#2563EB !important;
+    font-size:0.78rem !important;
+    font-weight:600 !important;
+    padding:0.4rem 1rem !important;
+    margin-top:0 !important;
+    transition:background 0.15s !important;
+    box-shadow:none !important;
+}
+.card-btn-wrap + div[data-testid="stButton"] > button:hover {
+    background:#DBEAFE !important;
 }
 .hot-price { font-size:1.05rem; font-weight:700; margin-top:0.25rem; }
 .pos { color:#00A86B; } .neg { color:#E53935; }
@@ -587,8 +596,7 @@ if not st.session_state.active:
                 pc      = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     st.markdown(f"""
-                    <div class="card-clickable">
-                    <div class="hot-chip" style="min-height:90px;cursor:pointer">
+                    <div class="hot-chip">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start">
                             <div>
                                 <span style="font-size:0.65rem;font-weight:700;color:{r_color};
@@ -606,9 +614,9 @@ if not st.session_state.active:
                             </div>
                         </div>
                     </div>
-                    </div>
+                    <div class="card-btn-wrap"></div>
                     """, unsafe_allow_html=True)
-                    if st.button("", key=f"btn_{q['ticker']}", use_container_width=True):
+                    if st.button("查看分析 →", key=f"btn_{q['ticker']}", use_container_width=True):
                         st.session_state.active = q["ticker"]
                         st.rerun()
 
