@@ -183,6 +183,19 @@ def get_quote(ticker):
         return {"ok": False, "error": "找不到價格"}
 
     chg = (price - prev) / prev * 100 if prev else 0
+
+    # 52W 高低：.info 拿不到時用 history 自己算（穩定）
+    w52h = info.get("fiftyTwoWeekHigh") or 0
+    w52l = info.get("fiftyTwoWeekLow") or 0
+    if not w52h:
+        try:
+            hist = t.history(period="1y", auto_adjust=True)
+            if not hist.empty:
+                w52h = float(hist["High"].max())
+                w52l = float(hist["Low"].min())
+        except Exception:
+            pass
+
     return {
         "ok": True, "ticker": ticker.upper(),
         "name": info.get("longName", ticker.upper()),
@@ -192,7 +205,7 @@ def get_quote(ticker):
         "pe": info.get("trailingPE"), "pb": info.get("priceToBook"),
         "eps": info.get("trailingEps"), "rev_growth": info.get("revenueGrowth"),
         "sector": info.get("sector", ""), "currency": info.get("currency", "USD"),
-        "w52h": info.get("fiftyTwoWeekHigh", 0), "w52l": info.get("fiftyTwoWeekLow", 0),
+        "w52h": w52h, "w52l": w52l,
         "beta": info.get("beta", 1.0), "desc": info.get("longBusinessSummary", ""),
         "target": info.get("targetMeanPrice"), "rec": info.get("recommendationKey", ""),
     }
@@ -311,7 +324,10 @@ def check_risks(quote, df):
     # 防線 4：高估值 IPO / P/E 過高
     # ══════════════════════════════════════════════════════
     mkt_cap = quote.get("mkt_cap", 0)
-    if mkt_cap and mkt_cap > 1e12 and (pe is None or pe <= 0):
+    currency = quote.get("currency", "USD")
+    # 統一換算成美元比較（台幣約 1 USD = 32 TWD）
+    mkt_cap_usd = mkt_cap / 32 if currency == "TWD" else mkt_cap
+    if mkt_cap_usd and mkt_cap_usd > 1e12 and (pe is None or pe <= 0):
         risks.append({"level": "danger",
             "msg": "市值超過 1 兆美元但尚未獲利（P/E 為負），"
                    "屬於高風險成長股，估值泡沫風險高"})
