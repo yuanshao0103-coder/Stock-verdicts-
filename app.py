@@ -156,35 +156,44 @@ div[class*="Toolbar"] { display:none !important; }
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_quote(ticker):
+    import concurrent.futures
     t = yf.Ticker(ticker)
-    info = {}
+
+    # ── 1. 價格：永遠用 fast_info（快、穩、不 timeout）──
+    price, prev, currency, mkt_cap = 0.0, 0.0, "USD", 0
     try:
-        info = t.info or {}
+        fi       = t.fast_info
+        price    = float(fi.last_price or 0)
+        prev     = float(fi.previous_close or price)
+        currency = getattr(fi, "currency", "USD") or "USD"
+        mkt_cap  = getattr(fi, "market_cap", 0) or 0
     except Exception:
         pass
-
-    price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
-    prev  = info.get("previousClose") or price
-
-    # .info 拿不到價格時用 fast_info 補
-    if not price:
-        try:
-            fi    = t.fast_info
-            price = float(fi.last_price or 0)
-            prev  = float(fi.previous_close or price)
-            if not info.get("currency"):
-                info["currency"] = getattr(fi, "currency", "TWD")
-            if not info.get("marketCap"):
-                info["marketCap"] = getattr(fi, "market_cap", 0) or 0
-        except Exception:
-            pass
 
     if not price:
         return {"ok": False, "error": "找不到價格"}
 
+    # ── 2. 財務數據：.info 加 8 秒 timeout，超時就放空 ──
+    info = {}
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            info = ex.submit(lambda: t.info or {}).result(timeout=8)
+    except Exception:
+        pass
+
+    # .info 有更精確的價格就採用
+    info_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+    if info_price:
+        price = float(info_price)
+        prev  = float(info.get("previousClose") or prev)
+    if info.get("currency"):
+        currency = info["currency"]
+    if info.get("marketCap"):
+        mkt_cap = info["marketCap"]
+
     chg = (price - prev) / prev * 100 if prev else 0
 
-    # 52W 高低：.info 拿不到時用 history 自己算（穩定）
+    # ── 3. 52W 高低：.info 沒有就從歷史資料算 ──
     w52h = info.get("fiftyTwoWeekHigh") or 0
     w52l = info.get("fiftyTwoWeekLow") or 0
     if not w52h:
@@ -201,10 +210,10 @@ def get_quote(ticker):
         "name": info.get("longName", ticker.upper()),
         "cn_name": get_cn_name(ticker),
         "price": price, "chg_pct": chg, "chg_abs": price - prev,
-        "volume": info.get("volume", 0), "mkt_cap": info.get("marketCap", 0),
+        "volume": info.get("volume", 0), "mkt_cap": mkt_cap,
         "pe": info.get("trailingPE"), "pb": info.get("priceToBook"),
         "eps": info.get("trailingEps"), "rev_growth": info.get("revenueGrowth"),
-        "sector": info.get("sector", ""), "currency": info.get("currency", "USD"),
+        "sector": info.get("sector", ""), "currency": currency,
         "w52h": w52h, "w52l": w52l,
         "beta": info.get("beta", 1.0), "desc": info.get("longBusinessSummary", ""),
         "target": info.get("targetMeanPrice"), "rec": info.get("recommendationKey", ""),
