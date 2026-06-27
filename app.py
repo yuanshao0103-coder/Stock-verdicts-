@@ -448,11 +448,19 @@ def run_mc(close, hold_days, n=8000):
     returns = (finals/entry-1)*100
     paths = entry * np.exp(np.cumsum(
         (mu-0.5*sigma**2)+sigma*np.random.standard_normal((80,hold_days)), axis=1))
-    return {"win":float(np.mean(returns>0)*100), "loss":float(np.mean(returns<0)*100),
+    win  = float(np.mean(returns > 0) * 100)
+    loss = 100.0 - win   # 確保 win + loss = 100%
+    # Kelly 用條件期望值（非 p10/p90），計算更準確
+    _w = returns[returns > 0]
+    _l = returns[returns < 0]
+    avg_cond_win  = float(_w.mean() / 100) if len(_w) > 0 else 0.01
+    avg_cond_loss = float(abs(_l.mean()) / 100) if len(_l) > 0 else 0.01
+    return {"win": win, "loss": loss,
             "exp":float(np.mean(returns)), "p10":float(np.percentile(returns,10)),
             "p90":float(np.percentile(returns,90)),
             "vol":sigma*np.sqrt(252)*100, "entry":entry,
-            "paths":paths, "mu":mu, "sigma":sigma}
+            "paths":paths, "mu":mu, "sigma":sigma,
+            "avg_cond_win": avg_cond_win, "avg_cond_loss": avg_cond_loss}
 
 MEME_STOCKS = {"GME", "AMC", "BBBY", "KOSS", "BB", "NOK", "EXPR", "CLOV", "WISH", "WKHS"}
 
@@ -600,7 +608,8 @@ def get_fast_quote(ticker: str) -> dict:
         price = float(fi.last_price or 0)
         prev  = float(fi.previous_close or price)
         chg   = (price - prev) / prev * 100 if prev else 0.0
-        cur   = getattr(fi, "currency", "TWD")
+        _default_cur = "TWD" if (ticker.endswith(".TW") or ticker.endswith(".TWO")) else "USD"
+        cur   = getattr(fi, "currency", _default_cur)
         return {"ok": True, "ticker": ticker, "price": price,
                 "chg_pct": chg, "currency": cur,
                 "cn_name": get_cn_name(ticker)}
@@ -707,7 +716,9 @@ if search_btn and search_val.strip():
 with st.expander("⚙️ 投資參數設定", expanded=False):
     p1, p2 = st.columns(2)
     with p1:
-        invest_amount = st.number_input("投入金額（USD $）", min_value=100, max_value=10_000_000,
+        _active_now = st.session_state.get("active", "")
+        _invest_cur = "新台幣（TWD）" if (_active_now.endswith(".TW") or _active_now.endswith(".TWO")) else "美元（USD）"
+        invest_amount = st.number_input(f"投入金額（{_invest_cur}）", min_value=100, max_value=10_000_000,
                                          value=st.session_state.invest, step=1000, format="%d")
         st.session_state.invest = invest_amount
     with p2:
@@ -1387,11 +1398,11 @@ with tab_trade:
             f'<div style="font-size:0.72rem;color:{ma_entry_color};margin-top:0.3rem;line-height:1.5">{ma_entry_note}</div>'
         )
 
-        # Kelly 倉位 + 波動率調整
+        # Kelly 倉位 + 波動率調整（使用條件期望值，非 p10/p90 估計）
         win_p  = mc["win"] / 100
         loss_p = mc["loss"] / 100
-        avg_w  = max(mc["p90"] / 100, 0.01)
-        avg_l  = max(abs(mc["p10"]) / 100, 0.01)
+        avg_w  = max(mc["avg_cond_win"],  0.01)
+        avg_l  = max(mc["avg_cond_loss"], 0.01)
         kelly  = max(0.0, (win_p * avg_w - loss_p * avg_l) / avg_w)
         ann_vol = mc["sigma"] * np.sqrt(252)  # 年化波動率
 
@@ -1413,13 +1424,13 @@ with tab_trade:
         pos_pct = max(pos_pct, 3)   # 最少 3%，避免顯示 0
 
         # 目標 & 止損
-        # mu 上限鎖年化 20%，避免歷史牛市把預測拉爆；取中位數（z=0）而非 90 百分位
-        _mu_capped = min(mc["mu"], np.log(1.20) / 252)
-        target_price = mc["entry"] * np.exp(
-            (_mu_capped - 0.5 * mc["sigma"]**2) * hold_days)
-        stop_pct    = max(0.07, min(mc["sigma"] * np.sqrt(hold_days) * 1.0, 0.30))  # 1σ 持有期波動，上限30%
-        stop_price  = price * (1 - stop_pct)
-        target_pct  = (target_price / price - 1) * 100
+        # mu 上限鎖年化 35%，取中位數情境（z=0）；下限確保目標不低於現價
+        _mu_capped   = min(mc["mu"], np.log(1.35) / 252)
+        _raw_target  = mc["entry"] * np.exp((_mu_capped - 0.5 * mc["sigma"]**2) * hold_days)
+        target_price = max(_raw_target, price * 1.01)   # 至少比現價高 1%
+        stop_pct     = max(0.07, min(mc["sigma"] * np.sqrt(hold_days) * 1.0, 0.30))
+        stop_price   = price * (1 - stop_pct)
+        target_pct   = (target_price / price - 1) * 100
         stop_pct_show = stop_pct * 100
 
         with col_buy:
