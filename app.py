@@ -672,35 +672,18 @@ if not st.session_state.active:
     _ROW_BORDERS = ["#93C5FD", "#F9A8D4", "#FCD34D", "#86EFAC", "#C4B5FD"]
 
     def render_grid(tickers):
-        # JS: find all empty-label buttons inside card columns and move them over the card above
-        st.markdown("""<script>
-setTimeout(function(){
-  try{
-    var doc=window.parent.document;
-    var vcols=doc.querySelectorAll(
-      '[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]');
-    vcols.forEach(function(vc){
-      var md=vc.querySelector('.stMarkdown');
-      var bc=vc.querySelector('.stButton');
-      if(!md||!bc)return;
-      var btn=bc.querySelector('button');
-      if(!btn||btn.innerText.trim()!=='')return;
-      btn.style.setProperty('background','transparent','important');
-      btn.style.setProperty('border','none','important');
-      btn.style.setProperty('box-shadow','none','important');
-      btn.style.setProperty('height','120px','important');
-      btn.style.setProperty('width','100%','important');
-      btn.style.setProperty('cursor','pointer','important');
-      var ec=bc.closest('[data-testid="element-container"]');
-      if(ec){
-        ec.style.setProperty('margin-top','-125px','important');
-        ec.style.setProperty('position','relative','important');
-        ec.style.setProperty('z-index','10','important');
-      }
-    });
-  }catch(e){}
-},700);
-</script>""", unsafe_allow_html=True)
+        # CSS: make nav buttons (space-label) transparent + tall so card can overlay them
+        st.markdown("""<style>
+[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button{
+    background:transparent!important;border:none!important;
+    box-shadow:none!important;min-height:120px!important;cursor:pointer!important;
+}
+[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button:hover,
+[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button:focus,
+[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button:active{
+    background:transparent!important;border:none!important;box-shadow:none!important;
+}
+</style>""", unsafe_allow_html=True)
         with st.spinner("載入行情…"):
             stocks = load_stocks(tickers)
         rows = [stocks[i:i+2] for i in range(0, len(stocks), 2)]
@@ -717,18 +700,20 @@ setTimeout(function(){
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     safe_id = q['ticker'].replace('.','_').replace('-','_')
+                    # Button FIRST (transparent via CSS, 120px tall)
+                    if st.button(" ", key=f"nav_{safe_id}", use_container_width=True):
+                        st.session_state.active = q['ticker']
+                        st.rerun()
+                    # Card HTML overlaid on top with negative margin; pointer-events:none passes clicks through to button
                     st.markdown(f"""
-<div style="cursor:pointer;background:#fff;border:2px solid {bdr};border-radius:14px;
-  padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem;
-  transition:box-shadow .15s,transform .12s">
+<div style="margin-top:-130px;position:relative;z-index:2;pointer-events:none;
+  background:#fff;border:2px solid {bdr};border-radius:14px;
+  padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem">
   <div style="font-size:.67rem;font-weight:600;color:{risk['color']};margin-bottom:.28rem">{risk['emoji']} {risk['label']}</div>
   <div style="font-size:.86rem;font-weight:700;color:#111;margin-bottom:.12rem">{ticker_disp}&nbsp;<span style="font-weight:400;color:#6B7280;font-size:.78rem">{cn}</span></div>
   <div style="font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;color:#111;margin-bottom:.06rem">{cur} {q['price']:,.1f}</div>
   <div style="font-size:.83rem;font-weight:600;color:{chg_color}">{arrow} {abs(chg):.2f}%</div>
 </div>""", unsafe_allow_html=True)
-                    if st.button(" ", key=f"nav_{safe_id}", use_container_width=True):
-                        st.session_state.active = q['ticker']
-                        st.rerun()
 
     with tab_tw:
         render_grid(TW_TICKERS)
