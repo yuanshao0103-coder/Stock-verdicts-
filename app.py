@@ -464,6 +464,20 @@ def run_mc(close, hold_days, n=8000):
 
 MEME_STOCKS = {"GME", "AMC", "BBBY", "KOSS", "BB", "NOK", "EXPR", "CLOV", "WISH", "WKHS"}
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_vix():
+    try:
+        return float(yf.Ticker("^VIX").history(period="3d")["Close"].iloc[-1])
+    except Exception:
+        return None
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_twd_rate():
+    try:
+        return float(yf.Ticker("TWD=X").history(period="3d")["Close"].iloc[-1])
+    except Exception:
+        return 32.0
+
 def check_risks(quote, df):
     risks = []
     if df.empty or not quote.get("ok"): return risks
@@ -531,8 +545,7 @@ def check_risks(quote, df):
     # ══════════════════════════════════════════════════════
     mkt_cap = quote.get("mkt_cap", 0)
     currency = quote.get("currency", "USD")
-    # 統一換算成美元比較（台幣約 1 USD = 32 TWD）
-    mkt_cap_usd = mkt_cap / 32 if currency == "TWD" else mkt_cap
+    mkt_cap_usd = mkt_cap / _get_twd_rate() if currency == "TWD" else mkt_cap
     if mkt_cap_usd and mkt_cap_usd > 1e12 and pe is not None and pe <= 0:
         risks.append({"level": "danger",
             "msg": "市值超過 1 兆美元但尚未獲利（P/E 為負），"
@@ -559,14 +572,12 @@ def check_risks(quote, df):
     # ══════════════════════════════════════════════════════
     # 防線 5：VIX 恐慌指數
     # ══════════════════════════════════════════════════════
-    try:
-        vix = float(yf.Ticker("^VIX").history(period="3d")["Close"].iloc[-1])
+    vix = _get_vix()
+    if vix is not None:
         if vix >= 30:
             risks.append({"level": "warn", "msg": f"VIX {vix:.1f} 市場極度恐慌，建議大幅降低投入"})
         elif vix >= 22:
             risks.append({"level": "warn", "msg": f"VIX {vix:.1f} 市場警戒"})
-    except:
-        pass
 
     # ══════════════════════════════════════════════════════
     # 防線 6：成交量異常爆量
@@ -1164,6 +1175,15 @@ with tab_news:
         pe  = quote.get("pe");  pb  = quote.get("pb");   eps  = quote.get("eps")
         rev = quote.get("rev_growth"); beta = quote.get("beta"); tgt = quote.get("target")
         rec = (quote.get("rec") or "").lower()
+        _REC_LABEL = {
+            "strong_buy": "強力買入", "strongbuy": "強力買入",
+            "buy": "買入",
+            "hold": "持有", "neutral": "持有",
+            "underperform": "表現落後",
+            "sell": "賣出",
+            "strong_sell": "強力賣出", "strongsell": "強力賣出",
+        }
+        rec_label = _REC_LABEL.get(rec, rec.upper()) if rec else "N/A"
         rev_s = f"+{rev*100:.1f}%" if rev and rev > 0 else (f"{rev*100:.1f}%" if rev else "N/A")
         up    = (tgt / price - 1) * 100 if tgt and price else None
         up_s  = f"{_cur_sign}{tgt:.2f} ({up:+.1f}%)" if up else "N/A"
@@ -1217,7 +1237,7 @@ with tab_news:
                 fin_row("營收成長",   rev_s, rev_c) +
                 fin_row("Beta",       f"{beta:.2f}"          if beta  else "N/A", beta_c) +
                 fin_row("目標價",     up_s, up_c) +
-                fin_row("分析師評級", rec.upper() or "N/A",  rec_c))
+                fin_row("分析師評級", rec_label,  rec_c))
         st.markdown(f'<div class="card">{html}</div>', unsafe_allow_html=True)
 
         funny = get_funny_desc(active, quote.get("desc", ""))
@@ -1228,11 +1248,6 @@ with tab_news:
 with tab_trade:
     try:
         # ── 外部風險警示 ──────────────────────────────────
-        _ext_warnings = list(_EXTERNAL_RISKS.get(active, []))
-        _pump_warnings = check_pump_risk(df)
-        _all_warnings = _ext_warnings + [("🚨 " + t if not t.startswith("🚨") and not t.startswith("⚠️") else t, d) for t, d in _pump_warnings]
-
-        # 重新整理：pump warnings 已帶 emoji，不需再加
         _all_warnings = list(_EXTERNAL_RISKS.get(active, [])) + check_pump_risk(df)
 
         if _all_warnings:
@@ -1506,7 +1521,7 @@ with tab_trade:
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">預計持有</span>
-                    <span style="font-size:0.8rem;font-weight:600">{hold_days} 天</span>
+                    <span style="font-size:0.8rem;font-weight:600">{int(st.session_state.hold)} 自然日（≈{hold_days} 交易日）</span>
                 </div>
                 <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">
                     到達目標或觸碰停損任一先到先出場</div>
