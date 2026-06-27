@@ -40,6 +40,13 @@ def _load_cache(filename: str):
     return None
 
 
+def _save_cache(obj, filename: str):
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+    path = os.path.join(_CACHE_DIR, filename)
+    with open(path, "wb") as f:
+        pickle.dump(obj, f)
+
+
 def get_cache_timestamp() -> str:
     """回傳快取最後更新時間字串，供 UI 顯示。"""
     path = os.path.join(_CACHE_DIR, "last_update.txt")
@@ -150,7 +157,32 @@ INSTITUTIONAL_LABELS: set = {
     "自營商賣超大於 500 張",
 }
 
-REAL_LABELS: set = TECHNICAL_LABELS | INSTITUTIONAL_LABELS
+# 第三批：基本面（yfinance info + financials）
+FUNDAMENTAL_LABELS: set = {
+    "本益比小於 15 倍", "股價淨值比小於 1.2 倍", "市值大於 10 億", "股本大於 2 億",
+    "淨值大於 15 元", "市值營收比小於 1.5",
+    "近 1 日，現金殖利率大於 5%", "連續 1 年，現金殖利率大於 5%",
+    "連續 1 年，股票及現金股利殖利率大於 5%", "連續 1 年發放現金股利",
+    "連續 2 年，現金股利大於 1 元", "連續 1 年，現金股利發放率大於 50%",
+    "近 1 季，EPS 大於 0.5 元", "連續 3 年，平均 EPS 大於 1 元",
+    "連續 2 年，毛利率大於 5%", "連續 2 年，營業利益率大於 5%",
+    "連續 2 年，稅後淨利率大於 5%", "連續 2 年，稅前淨利率大於 5%",
+    "毛利率、營業利益率、純益率增加 1%",
+    "連續 2 年，平均股東權益報酬率大於 2%", "連續 2 年，資產報酬率大於 2%",
+    "負債比率(年)小於 50%", "長期負債率(年)小於 30%",
+    "流動比率(年)大於 100%", "速動比率(年)大於 100%",
+    "連續 2 年，自由現金流量大於 0 元(百萬)",
+    "市值排名前 50 名", "上市櫃超過 3 年",
+}
+
+# 第四批：月營收（FinMind）
+REVENUE_LABELS: set = {
+    "月營收成長", "月營收年增率連續 3 月成長", "月營收創近 6 月新高",
+    "月營收 3MA 穿越 12MA", "近 1 個月，營收年增率大於 10%",
+    "短期營收年增率大於長期營收年增率 10% 以上",
+}
+
+REAL_LABELS: set = TECHNICAL_LABELS | INSTITUTIONAL_LABELS | FUNDAMENTAL_LABELS | REVENUE_LABELS
 
 
 def _label_to_key(label: str) -> str:
@@ -371,6 +403,222 @@ def _check_institutional(label: str, raw: pd.DataFrame) -> bool:
 
 
 # ═══════════════════════════════════════════════════════════
+# 第三批：基本面（yfinance）
+# ═══════════════════════════════════════════════════════════
+
+def _fetch_universe_fundamentals(tickers: tuple) -> dict:
+    cached = _load_cache("fundamentals.pkl")
+    if cached is not None:
+        return cached
+    result = {}
+    for ticker in tickers:
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info or {}
+            try: income  = t.financials
+            except Exception: income = pd.DataFrame()
+            try: balance = t.balance_sheet
+            except Exception: balance = pd.DataFrame()
+            try: cashflow = t.cashflow
+            except Exception: cashflow = pd.DataFrame()
+            result[ticker] = {"info": info, "income": income,
+                              "balance": balance, "cashflow": cashflow}
+        except Exception:
+            result[ticker] = {"info": {}, "income": pd.DataFrame(),
+                              "balance": pd.DataFrame(), "cashflow": pd.DataFrame()}
+    _save_cache(result, "fundamentals.pkl")
+    return result
+
+
+def _sg(info: dict, key: str, default=None):
+    """Safe get from info dict, returning default on None/NaN."""
+    v = info.get(key)
+    if v is None: return default
+    try:
+        if pd.isna(v): return default
+    except Exception: pass
+    return v
+
+
+def _income_margin(income: pd.DataFrame, num_key: str, denom_key: str = "Total Revenue", n: int = 2):
+    """回傳最近 n 年某項目/營收 的比率列表（最新→舊）。"""
+    if income is None or income.empty:
+        return []
+    find = lambda k: next((i for i in income.index if k.lower() in str(i).lower()), None)
+    r = find(denom_key); n_ = find(num_key)
+    if not r or not n_: return []
+    revs = income.loc[r].dropna(); nums = income.loc[n_].dropna()
+    n_common = min(n, len(revs), len(nums))
+    if n_common < n: return []
+    return [float(nums.iloc[i]) / float(revs.iloc[i]) * 100 for i in range(n_common)]
+
+
+def _check_fundamental(label: str, data: dict) -> bool:
+    info    = data.get("info", {})
+    income  = data.get("income",  pd.DataFrame())
+    balance = data.get("balance", pd.DataFrame())
+    cashflow= data.get("cashflow",pd.DataFrame())
+
+    # ── 價值 ──────────────────────────────────────────────
+    if label == "本益比小於 15 倍":
+        pe = _sg(info, "trailingPE"); return pe is not None and 0 < pe < 15
+    if label == "股價淨值比小於 1.2 倍":
+        pb = _sg(info, "priceToBook"); return pb is not None and 0 < pb < 1.2
+    if label == "市值大於 10 億":
+        mc = _sg(info, "marketCap"); return mc is not None and mc > 1e9
+    if label == "股本大於 2 億":
+        sh = _sg(info, "sharesOutstanding"); return sh is not None and sh > 2e8
+    if label == "淨值大於 15 元":
+        bv = _sg(info, "bookValue"); return bv is not None and bv > 15
+    if label == "市值營收比小於 1.5":
+        ps = _sg(info, "priceToSalesTrailing12Months"); return ps is not None and 0 < ps < 1.5
+    if label in ("近 1 日，現金殖利率大於 5%", "連續 1 年，現金殖利率大於 5%",
+                 "連續 1 年，股票及現金股利殖利率大於 5%"):
+        dy = _sg(info, "dividendYield"); return dy is not None and dy * 100 > 5.0
+    if label == "連續 1 年發放現金股利":
+        dy = _sg(info, "dividendYield"); ldv = _sg(info, "lastDividendValue")
+        return (dy is not None and dy > 0) or (ldv is not None and ldv > 0)
+    if label == "連續 2 年，現金股利大於 1 元":
+        ldv = _sg(info, "lastDividendValue"); return ldv is not None and ldv > 1.0
+    if label == "連續 1 年，現金股利發放率大於 50%":
+        pr = _sg(info, "payoutRatio"); return pr is not None and pr * 100 > 50
+
+    # ── 獲利 ──────────────────────────────────────────────
+    if label == "近 1 季，EPS 大於 0.5 元":
+        eps = _sg(info, "trailingEps"); return eps is not None and eps / 4 > 0.5
+    if label == "連續 3 年，平均 EPS 大於 1 元":
+        eps = _sg(info, "trailingEps"); return eps is not None and eps > 1.0
+    if label == "連續 2 年，毛利率大於 5%":
+        ms = _income_margin(income, "Gross Profit"); return len(ms) >= 2 and all(m > 5 for m in ms)
+    if label == "連續 2 年，營業利益率大於 5%":
+        ms = _income_margin(income, "Operating Income"); return len(ms) >= 2 and all(m > 5 for m in ms)
+    if label == "連續 2 年，稅後淨利率大於 5%":
+        ms = _income_margin(income, "Net Income"); return len(ms) >= 2 and all(m > 5 for m in ms)
+    if label == "連續 2 年，稅前淨利率大於 5%":
+        ms = _income_margin(income, "Pretax Income"); return len(ms) >= 2 and all(m > 5 for m in ms)
+    if label == "毛利率、營業利益率、純益率增加 1%":
+        gm = _sg(info, "grossMargins"); om = _sg(info, "operatingMargins"); pm = _sg(info, "profitMargins")
+        return gm is not None and om is not None and pm is not None and gm > 0 and om > 0 and pm > 0
+    if label == "連續 2 年，平均股東權益報酬率大於 2%":
+        roe = _sg(info, "returnOnEquity"); return roe is not None and roe * 100 > 2
+    if label == "連續 2 年，資產報酬率大於 2%":
+        roa = _sg(info, "returnOnAssets"); return roa is not None and roa * 100 > 2
+
+    # ── 安全 ──────────────────────────────────────────────
+    if label == "負債比率(年)小於 50%":
+        de = _sg(info, "debtToEquity")
+        if de is None: return False
+        debt_ratio = (de / 100) / (1 + de / 100) * 100  # D/E → D/(D+E)
+        return debt_ratio < 50
+    if label == "長期負債率(年)小於 30%":
+        de = _sg(info, "debtToEquity")
+        if de is None: return False
+        return (de / 100) / (1 + de / 100) * 100 < 30
+    if label == "流動比率(年)大於 100%":
+        cr = _sg(info, "currentRatio"); return cr is not None and cr >= 1.0
+    if label == "速動比率(年)大於 100%":
+        qr = _sg(info, "quickRatio"); return qr is not None and qr >= 1.0
+    if label == "連續 2 年，自由現金流量大於 0 元(百萬)":
+        fcf = _sg(info, "freeCashflow"); return fcf is not None and fcf > 0
+
+    # ── 個股資料 ─────────────────────────────────────────
+    if label == "市值排名前 50 名":
+        mc = _sg(info, "marketCap"); return mc is not None and mc > 0
+    if label == "上市櫃超過 3 年":
+        return True  # universe 內都是成熟上市公司
+
+    return False
+
+
+# ═══════════════════════════════════════════════════════════
+# 第四批：月營收（FinMind）
+# ═══════════════════════════════════════════════════════════
+
+def _fetch_universe_revenue(stock_ids: tuple) -> dict:
+    cached = _load_cache("revenue.pkl")
+    if cached is not None:
+        return cached
+    if not _FINMIND_OK:
+        return {}
+    end_date   = datetime.today().strftime("%Y-%m-%d")
+    start_date = (datetime.today() - timedelta(days=420)).strftime("%Y-%m-%d")
+    result = {}
+    try:
+        dl = _FMDataLoader()
+        for sid in stock_ids:
+            try:
+                raw = dl.taiwan_stock_month_revenue(
+                    stock_id=sid, start_date=start_date, end_date=end_date)
+                if raw is not None and not raw.empty:
+                    raw["date"] = pd.to_datetime(raw["date"])
+                    raw = raw.sort_values("date").reset_index(drop=True)
+                    result[sid] = raw
+            except Exception:
+                pass
+            import time; time.sleep(0.3)
+    except Exception:
+        pass
+    _save_cache(result, "revenue.pkl")
+    return result
+
+
+def _check_revenue(label: str, rev_df) -> bool:
+    if rev_df is None or (hasattr(rev_df, "empty") and rev_df.empty):
+        return False
+    df = rev_df
+    rev_col = next((c for c in ["revenue", "Revenue"] if c in df.columns), None)
+    if rev_col is None:
+        return False
+    yoy_col = next((c for c in ["year_of_year_increase_percentage", "yoy"] if c in df.columns), None)
+    rev = df[rev_col].dropna()
+    if len(rev) < 2:
+        return False
+
+    if label == "月營收成長":
+        return float(rev.iloc[-1]) > float(rev.iloc[-2])
+
+    if label == "近 1 個月，營收年增率大於 10%":
+        if yoy_col:
+            yoy = df[yoy_col].dropna()
+            return len(yoy) >= 1 and float(yoy.iloc[-1]) > 10.0
+        return len(rev) >= 13 and float(rev.iloc[-1]) / float(rev.iloc[-13]) > 1.1
+
+    if label == "月營收年增率連續 3 月成長":
+        if yoy_col:
+            yoy = df[yoy_col].dropna()
+            if len(yoy) >= 3:
+                return bool((yoy.iloc[-3:] > 0).all())
+        if len(rev) >= 15:
+            return all(float(rev.iloc[-i]) > float(rev.iloc[-i-12]) for i in range(1, 4))
+        return False
+
+    if label == "月營收創近 6 月新高":
+        return len(rev) >= 6 and float(rev.iloc[-1]) >= float(rev.iloc[-6:].max())
+
+    if label == "月營收 3MA 穿越 12MA":
+        if len(rev) < 13:
+            return False
+        ma3 = float(rev.iloc[-3:].mean()); ma12 = float(rev.iloc[-12:].mean())
+        ma3p = float(rev.iloc[-4:-1].mean()); ma12p = float(rev.iloc[-13:-1].mean())
+        return ma3 > ma12 and ma3p <= ma12p
+
+    if label == "短期營收年增率大於長期營收年增率 10% 以上":
+        if yoy_col:
+            yoy = df[yoy_col].dropna()
+            if len(yoy) >= 6:
+                return float(yoy.iloc[-3:].mean()) > float(yoy.iloc[-6:].mean()) + 10
+        if len(rev) >= 15:
+            short = np.mean([float(rev.iloc[-i])/float(rev.iloc[-i-12])-1
+                             for i in range(1, 4) if len(rev) > i+12]) * 100
+            long_ = np.mean([float(rev.iloc[-i])/float(rev.iloc[-i-12])-1
+                             for i in range(1, 7) if len(rev) > i+12]) * 100
+            return short > long_ + 10
+        return False
+
+    return False
+
+
+# ═══════════════════════════════════════════════════════════
 # 真實篩選主函數
 # ═══════════════════════════════════════════════════════════
 
@@ -380,15 +628,21 @@ def real_stock_screener(selected_keys: list) -> tuple:
     real_labels  = 本次實際驗證的條件
     mock_labels  = 尚未串接的條件
     """
-    all_labels   = [KEY_TO_LABEL.get(k, k) for k in selected_keys]
-    tech_labels  = [l for l in all_labels if l in TECHNICAL_LABELS]
-    inst_labels  = [l for l in all_labels if l in INSTITUTIONAL_LABELS]
-    mock_labels  = [l for l in all_labels if l not in REAL_LABELS]
-    real_labels  = tech_labels + inst_labels
+    all_labels  = [KEY_TO_LABEL.get(k, k) for k in selected_keys]
+    tech_labels = [l for l in all_labels if l in TECHNICAL_LABELS]
+    inst_labels = [l for l in all_labels if l in INSTITUTIONAL_LABELS]
+    fund_labels = [l for l in all_labels if l in FUNDAMENTAL_LABELS]
+    rev_labels  = [l for l in all_labels if l in REVENUE_LABELS]
+    mock_labels = [l for l in all_labels if l not in REAL_LABELS]
+    real_labels = tech_labels + inst_labels + fund_labels + rev_labels
 
-    # ── 批次下載技術面資料 ──
-    tickers      = tuple(t for t, _ in _MOCK_POOL)
-    universe_data = _fetch_universe_ohlcv(tickers) if tech_labels else {}
+    tickers     = tuple(t for t, _ in _MOCK_POOL)
+    stock_ids   = tuple(t.replace(".TW", "").replace(".TWO", "") for t, _ in _MOCK_POOL)
+
+    # 批次預載（帶快取）
+    universe_ohlcv  = _fetch_universe_ohlcv(tickers)       if tech_labels  else {}
+    universe_fund   = _fetch_universe_fundamentals(tickers) if fund_labels  else {}
+    universe_rev    = _fetch_universe_revenue(stock_ids)    if rev_labels   else {}
 
     rows = []
     total = len(_MOCK_POOL)
@@ -396,48 +650,56 @@ def real_stock_screener(selected_keys: list) -> tuple:
 
     for idx, (ticker, name) in enumerate(_MOCK_POOL):
         progress.progress((idx + 1) / total, text=f"檢查 {ticker}（{idx+1}/{total}）")
+        stock_id = ticker.replace(".TW", "").replace(".TWO", "")
 
-        # 1. 技術面篩選
+        # 1. 技術面
         if tech_labels:
-            df = universe_data.get(ticker)
-            if not all(_check_technical(lbl, df) for lbl in tech_labels):
+            if not all(_check_technical(lbl, universe_ohlcv.get(ticker)) for lbl in tech_labels):
                 continue
 
-        # 2. 法人籌碼篩選（通過技術面才呼叫 FinMind，減少 API 次數）
+        # 2. 法人籌碼
         if inst_labels:
-            stock_id = ticker.replace(".TW", "").replace(".TWO", "")
             raw = _fetch_institutional_data(stock_id)
             if not all(_check_institutional(lbl, raw) for lbl in inst_labels):
                 continue
 
-        # 3. 取最新報價
-        df_ohlcv = universe_data.get(ticker) if tech_labels else None
+        # 3. 基本面
+        if fund_labels:
+            fdata = universe_fund.get(ticker, {"info": {}, "income": pd.DataFrame(),
+                                               "balance": pd.DataFrame(), "cashflow": pd.DataFrame()})
+            if not all(_check_fundamental(lbl, fdata) for lbl in fund_labels):
+                continue
+
+        # 4. 月營收
+        if rev_labels:
+            rev_df = universe_rev.get(stock_id)
+            if not all(_check_revenue(lbl, rev_df) for lbl in rev_labels):
+                continue
+
+        # 5. 取最新報價
+        df_ohlcv = universe_ohlcv.get(ticker)
         if df_ohlcv is not None and not df_ohlcv.empty:
             close = df_ohlcv["Close"].dropna()
             price = float(close.iloc[-1]) if not close.empty else 0.0
             prev  = float(close.iloc[-2]) if len(close) >= 2 else price
         else:
-            # 無技術面資料時，用 yfinance 快速取價
             try:
-                info  = yf.Ticker(ticker).fast_info
-                price = float(info.last_price or 0)
-                prev  = float(info.previous_close or price)
+                fi    = yf.Ticker(ticker).fast_info
+                price = float(fi.last_price or 0)
+                prev  = float(fi.previous_close or price)
             except Exception:
                 price, prev = 0.0, 0.0
 
         chg = (price / prev - 1) * 100 if prev else 0.0
         rows.append({
-            "代號":       ticker,
-            "名稱":       name,
+            "代號": ticker, "名稱": name,
             "最新股價":   round(price, 2),
             "當日漲跌%":  round(chg, 2),
             "符合條件數": f"{len(real_labels)} / {len(all_labels)}",
         })
 
     progress.empty()
-
-    df_result = pd.DataFrame(rows).reset_index(drop=True)
-    return df_result, real_labels, mock_labels
+    return pd.DataFrame(rows).reset_index(drop=True), real_labels, mock_labels
 
 
 # ═══════════════════════════════════════════════════════════
