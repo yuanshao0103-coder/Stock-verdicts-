@@ -345,7 +345,10 @@ def get_quote(ticker):
                     for row_name in q_stmt.index:
                         label = str(row_name)
                         if "Net Income" in label and "Minority" not in label and "Noncontrolling" not in label:
-                            ttm_ni = float(q_stmt.loc[row_name].iloc[:4].sum())
+                            _q_data = q_stmt.loc[row_name].iloc[:4].dropna()
+                            if len(_q_data) < 4:
+                                break  # 季度不足 4 季，TTM 不可靠，跳過
+                            ttm_ni = float(_q_data.sum())
                             if ttm_ni > 0:
                                 eps_val = ttm_ni / shares
                                 pe_val  = price / eps_val
@@ -1057,13 +1060,18 @@ with tab_chart:
         import plotly.graph_objects as _go
         from plotly.subplots import make_subplots as _msp
         _df = df.copy()
+        # 過濾除權息造成的 OHLC 極端值（單日 Close 變動 >20% 視為除權息跳空）
+        _close_chg = _df["Close"].pct_change().abs()
+        _outlier   = _close_chg > 0.20
+        _df_plot   = _df[~_outlier] if _outlier.sum() < len(_df) * 0.05 else _df
         _ma5  = _df["Close"].rolling(5).mean()
         _ma20 = _df["Close"].rolling(20).mean()
         _ma60 = _df["Close"].rolling(60).mean()
         _fig_k = _msp(rows=2,cols=1,row_heights=[0.72,0.28],
                       shared_xaxes=True,vertical_spacing=0.03)
         _fig_k.add_trace(_go.Candlestick(
-            x=_df.index,open=_df["Open"],high=_df["High"],low=_df["Low"],close=_df["Close"],
+            x=_df_plot.index,open=_df_plot["Open"],high=_df_plot["High"],
+            low=_df_plot["Low"],close=_df_plot["Close"],
             name="K棒",
             increasing=dict(fillcolor="#00C853",line=dict(color="#00C853",width=0.8)),
             decreasing=dict(fillcolor="#FF1744",line=dict(color="#FF1744",width=0.8))),
@@ -1271,10 +1279,10 @@ with tab_trade:
         close_t = df["Close"].dropna()
         vol_t   = df["Volume"].dropna()
 
-        # ── RSI(14) ──────────────────────────────────────
+        # ── RSI(14) — Wilder EMA (alpha=1/14) ────────────
         delta    = close_t.diff()
-        gain     = delta.clip(lower=0).rolling(14).mean()
-        loss     = (-delta.clip(upper=0)).rolling(14).mean()
+        gain     = delta.clip(lower=0).ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        loss     = (-delta.clip(upper=0)).ewm(alpha=1/14, min_periods=14, adjust=False).mean()
         rsi_s    = 100 - (100 / (1 + gain / loss.replace(0, float("nan"))))
         cur_rsi  = float(rsi_s.iloc[-1]) if not rsi_s.empty else 50.0
 
@@ -1671,7 +1679,7 @@ with tab_trade:
                  "sample_n": len(_fwd_map[_wn])}
                 for _wn in sorted(_fwd_map) if len(_fwd_map[_wn]) >= 3
             ])
-            _by_wk = _by_wk[_by_wk["week_num"].between(1, 52)].reset_index(drop=True)
+            _by_wk = _by_wk[_by_wk["week_num"].between(1, 53)].reset_index(drop=True)
             _cur_wk  = int(datetime.now().isocalendar()[1])
             _cur_yr  = datetime.now().year
             # 計算當年每週的開始日期（週一），用於 X 軸顯示
