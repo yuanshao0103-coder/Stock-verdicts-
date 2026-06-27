@@ -1445,7 +1445,7 @@ with tab_trade:
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
         # ── 週度投資機會圖 ────────────────────────────────
-        st.markdown("<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 歷年週度勝率 vs 成交量</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有1個月的歷史勝率</div>", unsafe_allow_html=True)
         try:
             import plotly.graph_objects as go_w
             _lh = get_long_history(active)
@@ -1454,14 +1454,34 @@ with tab_trade:
             _df_w.index = pd.to_datetime(_df_w.index)
             if hasattr(_df_w.index, "tz") and _df_w.index.tz is not None:
                 _df_w.index = _df_w.index.tz_localize(None)
-            _wk = _df_w.resample("W").agg({"Close": ["first", "last"], "Volume": "sum"})
-            _wk.columns = ["wk_open", "wk_close", "wk_vol"]
-            _wk["week_num"] = pd.to_datetime(_wk.index).isocalendar().week.astype(int)
-            _wk["is_up"] = (_wk["wk_close"] > _wk["wk_open"]).astype(int)
-            _by_wk = _wk.groupby("week_num").agg(
-                win_rate=("is_up", "mean"),
-                avg_vol=("wk_vol", "mean")
-            ).reset_index()
+            _df_w = _df_w.sort_index()
+
+            # 計算每個交易日「持有 21 個交易日後的報酬」，並依週號統計勝率
+            _close_s = _df_w["Close"].dropna()
+            _fwd_map = {}   # week_num -> list of bool (is_profit)
+            _vol_map = {}   # week_num -> list of weekly volume
+            for _i in range(len(_close_s) - 21):
+                _d   = _close_s.index[_i]
+                _ret = _close_s.iloc[_i + 21] / _close_s.iloc[_i] - 1
+                _wn  = int(_d.isocalendar()[1])
+                if not (1 <= _wn <= 52):
+                    continue
+                _fwd_map.setdefault(_wn, []).append(_ret > 0)
+            # 週成交量（用於右軸）
+            _wk_vol = _df_w.resample("W")["Volume"].sum()
+            _wk_vol.index = pd.to_datetime(_wk_vol.index)
+            for _idx, _v in _wk_vol.items():
+                _wn = int(_idx.isocalendar()[1])
+                if 1 <= _wn <= 52:
+                    _vol_map.setdefault(_wn, []).append(_v)
+
+            _by_wk = pd.DataFrame([
+                {"week_num": _wn,
+                 "win_rate": float(np.mean(_fwd_map[_wn])),
+                 "avg_vol":  float(np.mean(_vol_map.get(_wn, [0]))),
+                 "sample_n": len(_fwd_map[_wn])}
+                for _wn in sorted(_fwd_map) if len(_fwd_map[_wn]) >= 3
+            ])
             _by_wk = _by_wk[_by_wk["week_num"].between(1, 52)].reset_index(drop=True)
             _cur_wk  = int(datetime.now().isocalendar()[1])
             _cur_yr  = datetime.now().year
@@ -1492,7 +1512,7 @@ with tab_trade:
                 opacity=0.85,
                 yaxis="y",
                 customdata=_custom,
-                hovertemplate="%{customdata}<br>獲利機率 %{y:.1f}%<extra></extra>",
+                hovertemplate="%{customdata} 買進、持有1個月<br>歷史獲利機率 %{y:.1f}%<extra></extra>",
             ))
             _vol_unit  = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
             _vol_label = "千張" if _vol_unit == 1000 else "張"
