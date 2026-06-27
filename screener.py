@@ -56,6 +56,9 @@ def _save_cache(obj, filename: str):
     path = os.path.join(_CACHE_DIR, filename)
     with open(path, "wb") as f:
         pickle.dump(obj, f)
+    ts_path = os.path.join(_CACHE_DIR, "last_update.txt")
+    with open(ts_path, "w", encoding="utf-8") as f:
+        f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
 def get_cache_timestamp() -> str:
