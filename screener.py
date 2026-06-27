@@ -762,16 +762,16 @@ def _inject_screener_css():
     .cond-real  { display:inline-block; background:#D1FAE5; color:#065F46; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
     .run-screen button { background:linear-gradient(135deg,#2563EB,#1D4ED8) !important; color:#FFF !important; font-size:1rem !important; font-weight:700 !important; padding:0.85rem !important; border-radius:12px !important; box-shadow:0 4px 16px rgba(37,99,235,0.25) !important; }
     .result-head { font-size:0.95rem; font-weight:700; margin:1.25rem 0 0.75rem; display:flex; align-items:center; gap:0.5rem; }
-    /* ── 緊湊排版：篩選結果 & 自選股 ── */
-    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) {
+    /* ── 緊湊排版：篩選結果 & 自選股（只匹配直接子層含 sc-row-marker 的容器）── */
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .sc-row-marker) {
         gap: 0.25rem !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .hot-chip {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .sc-row-marker) .hot-chip {
         padding: 0.35rem 0.65rem !important;
         margin-bottom: 0 !important;
         border-radius: 8px !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .stButton > button {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .sc-row-marker) .stButton > button {
         height: 2rem !important;
         min-height: 2rem !important;
         padding: 0 0.5rem !important;
@@ -782,15 +782,15 @@ def _inject_screener_css():
         background: #F3F4F6 !important;
         border: 1px solid #D1D5DB !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .stButton > button:hover {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .sc-row-marker) .stButton > button:hover {
         background: #E5E7EB !important;
         border-color: #9CA3AF !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) [data-testid="stMarkdownContainer"] p {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .sc-row-marker) [data-testid="stMarkdownContainer"] p {
         margin: 0 !important;
         line-height: 1.2 !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) div[data-testid="stHorizontalBlock"] {
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .sc-row-marker) div[data-testid="stHorizontalBlock"] {
         align-items: center !important;
     }
     </style>
