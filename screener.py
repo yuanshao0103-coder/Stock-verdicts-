@@ -762,21 +762,21 @@ def _inject_screener_css():
     .cond-real  { display:inline-block; background:#D1FAE5; color:#065F46; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
     .run-screen button { background:linear-gradient(135deg,#2563EB,#1D4ED8) !important; color:#FFF !important; font-size:1rem !important; font-weight:700 !important; padding:0.85rem !important; border-radius:12px !important; box-shadow:0 4px 16px rgba(37,99,235,0.25) !important; }
     .result-head { font-size:0.95rem; font-weight:700; margin:1.25rem 0 0.75rem; display:flex; align-items:center; gap:0.5rem; }
-    /* ── 緊湊排版：篩選結果 & 自選股（精確 scope 到 container key）── */
-    div[data-testid="sc_result_list"] > div[data-testid="stVerticalBlock"],
-    div[data-testid="sc_wl_list"]     > div[data-testid="stVerticalBlock"] {
-        gap: 0.25rem !important;
+    /* ── 篩選結果 & 自選股緊湊排版
+         .hot-chip 只在篩選器用，首頁不用 → 安全判斷基準 ── */
+
+    /* 1. 縮小 row 間距（直接子層含 .hot-chip 的 stHB 的父層） */
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stHorizontalBlock"] .hot-chip) {
+        gap: 0.3rem !important;
     }
-    div[data-testid="sc_result_list"] .hot-chip,
-    div[data-testid="sc_wl_list"]     .hot-chip {
-        padding: 0.35rem 0.65rem !important;
-        margin-bottom: 0 !important;
-        border-radius: 8px !important;
+    /* 2. 垂直置中對齊按鈕與卡片 */
+    div[data-testid="stHorizontalBlock"]:has(.hot-chip) {
+        align-items: center !important;
     }
-    div[data-testid="sc_result_list"] .stButton > button,
-    div[data-testid="sc_wl_list"]     .stButton > button {
-        height: 2rem !important;
+    /* 3. 覆蓋首頁 min-height:140px，改為小按鈕（specificity 0,4,1 > 0,3,1）*/
+    div[data-testid="stHorizontalBlock"]:has(.hot-chip) [data-testid="stVerticalBlock"] .stButton > button {
         min-height: 2rem !important;
+        height: 2rem !important;
         padding: 0 0.5rem !important;
         font-size: 0.78rem !important;
         line-height: 2rem !important;
@@ -784,21 +784,19 @@ def _inject_screener_css():
         color: #374151 !important;
         background: #F3F4F6 !important;
         border: 1px solid #D1D5DB !important;
+        box-shadow: none !important;
     }
-    div[data-testid="sc_result_list"] .stButton > button:hover,
-    div[data-testid="sc_wl_list"]     .stButton > button:hover {
+    div[data-testid="stHorizontalBlock"]:has(.hot-chip) [data-testid="stVerticalBlock"] .stButton > button:hover {
         background: #E5E7EB !important;
         border-color: #9CA3AF !important;
     }
-    div[data-testid="sc_result_list"] [data-testid="stMarkdownContainer"] p,
-    div[data-testid="sc_wl_list"]     [data-testid="stMarkdownContainer"] p {
-        margin: 0 !important;
-        line-height: 1.2 !important;
+    /* 4. 卡片緊湊 */
+    div[data-testid="stHorizontalBlock"] .hot-chip {
+        padding: 0.35rem 0.65rem;
+        margin-bottom: 0;
+        border-radius: 8px;
     }
-    div[data-testid="sc_result_list"] div[data-testid="stHorizontalBlock"],
-    div[data-testid="sc_wl_list"]     div[data-testid="stHorizontalBlock"] {
-        align-items: center !important;
-    }
+    div[data-testid="stHorizontalBlock"] .hot-chip p { margin:0 !important; line-height:1.2 !important; }
     </style>
     """, unsafe_allow_html=True)
 
