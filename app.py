@@ -1282,7 +1282,7 @@ with tab_trade:
         _mu_capped = min(mc["mu"], np.log(1.20) / 252)
         target_price = mc["entry"] * np.exp(
             (_mu_capped - 0.5 * mc["sigma"]**2) * hold_days)
-        stop_pct    = max(0.07, mc["sigma"] * np.sqrt(21) * 1.5)  # 1.5σ 月波動
+        stop_pct    = max(0.07, min(mc["sigma"] * np.sqrt(hold_days) * 1.0, 0.30))  # 1σ 持有期波動，上限30%
         stop_price  = price * (1 - stop_pct)
         target_pct  = (target_price / price - 1) * 100
         stop_pct_show = stop_pct * 100
@@ -1302,7 +1302,7 @@ with tab_trade:
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">建議倉位</span>
                     <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600">
-                        {pos_pct}% 資金</span>
+                        {pos_pct}% ≈ {cur} {invest_amount * pos_pct / 100:,.0f}</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
@@ -1445,7 +1445,7 @@ with tab_trade:
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
         # ── 週度投資機會圖 ────────────────────────────────
-        st.markdown("<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有1個月的歷史勝率</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有 {hold_choice} 的歷史勝率</div>", unsafe_allow_html=True)
         try:
             import plotly.graph_objects as go_w
             _lh = get_long_history(active)
@@ -1460,9 +1460,9 @@ with tab_trade:
             _close_s = _df_w["Close"].dropna()
             _fwd_map = {}   # week_num -> list of bool (is_profit)
             _vol_map = {}   # week_num -> list of weekly volume
-            for _i in range(len(_close_s) - 21):
+            for _i in range(len(_close_s) - hold_days):
                 _d   = _close_s.index[_i]
-                _ret = _close_s.iloc[_i + 21] / _close_s.iloc[_i] - 1
+                _ret = _close_s.iloc[_i + hold_days] / _close_s.iloc[_i] - 1
                 _wn  = int(_d.isocalendar()[1])
                 if not (1 <= _wn <= 52):
                     continue
@@ -1512,7 +1512,7 @@ with tab_trade:
                 opacity=0.85,
                 yaxis="y",
                 customdata=_custom,
-                hovertemplate="%{customdata} 買進、持有1個月<br>歷史獲利機率 %{y:.1f}%<extra></extra>",
+                hovertemplate=f"%{{customdata}} 買進、持有{hold_choice}<br>歷史獲利機率 %{{y:.1f}}%<extra></extra>",
             ))
             _vol_unit  = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
             _vol_label = "千張" if _vol_unit == 1000 else "張"
