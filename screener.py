@@ -817,18 +817,17 @@ def render_stock_screener():
     if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
         watchlist = st.session_state.get("my_watchlist", [])
         active    = st.session_state.get("active", None)
-        # 把所有 toggle（c_xxxxxxxx）設回 False，其餘 key 刪除
+        gen       = st.session_state.get("toggle_gen", 0)
         for k in list(st.session_state.keys()):
-            if k.startswith("c_"):
-                st.session_state[k] = False
-            elif k not in ("my_watchlist", "active", "screener_panel_open",
-                           "invest", "hold", "clear_screener"):
+            if k not in ("my_watchlist", "active", "invest", "hold"):
                 del st.session_state[k]
-        st.session_state.my_watchlist = watchlist
+        st.session_state.my_watchlist      = watchlist
+        st.session_state.screener_selected = set()
+        st.session_state.screener_panel_open = True
+        st.session_state.toggle_gen        = gen + 1  # 新版本 → 所有 toggle 重建為 False
         if active is not None:
             st.session_state.active = active
-        st.session_state.screener_panel_open = True
-        st.rerun(scope="app")
+        st.rerun()
 
     if run:
         if n_selected == 0:
@@ -878,7 +877,8 @@ def _render_main_category(main_name: str, sub_dict: dict):
             display = f"📊 {lbl}"
         else:
             display = lbl
-        new_val = st.toggle(display, value=current, key=f"tg_{key}")
+        _tg_gen = st.session_state.get("toggle_gen", 0)
+        new_val = st.toggle(display, value=current, key=f"tg_{key}_{_tg_gen}")
         if new_val:
             st.session_state.screener_selected.add(key)
         else:
