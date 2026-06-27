@@ -308,14 +308,46 @@ def _check_technical(label: str, df: pd.DataFrame) -> bool:
 # 第二批：法人籌碼（FinMind）
 # ═══════════════════════════════════════════════════════════
 
+def _fetch_universe_institutional(stock_ids: tuple) -> dict:
+    """批次下載所有 universe 的法人籌碼並寫入快取。回傳 {stock_id: DataFrame}。"""
+    cached = _load_cache("institutional.pkl")
+    if cached is not None:
+        return cached
+
+    if not _FINMIND_OK:
+        return {}
+
+    end_date   = datetime.today().strftime("%Y-%m-%d")
+    start_date = (datetime.today() - timedelta(days=15)).strftime("%Y-%m-%d")
+    result = {}
+    try:
+        dl = _FMDataLoader()
+        for sid in stock_ids:
+            try:
+                raw = dl.taiwan_stock_institutional_investors(
+                    stock_id=sid, start_date=start_date, end_date=end_date)
+                if raw is not None and not raw.empty:
+                    raw["date"] = pd.to_datetime(raw["date"])
+                    raw["buy"]  = pd.to_numeric(raw["buy"],  errors="coerce").fillna(0)
+                    raw["sell"] = pd.to_numeric(raw["sell"], errors="coerce").fillna(0)
+                    raw["net"]  = raw["buy"] - raw["sell"]
+                    result[sid] = raw
+            except Exception:
+                pass
+            import time; time.sleep(0.2)
+    except Exception:
+        pass
+    if result:
+        _save_cache(result, "institutional.pkl")
+    return result
+
+
 def _fetch_institutional_data(stock_id: str) -> pd.DataFrame:
-    """優先讀本地快取；快取不存在才即時打 FinMind API。"""
-    # 優先讀本地快取
+    """單股查詢（app.py 法人動向區塊用）；優先讀快取。"""
     cached = _load_cache("institutional.pkl")
     if cached is not None:
         return cached.get(stock_id, pd.DataFrame())
 
-    # 快取不存在，即時從 FinMind 下載
     if not _FINMIND_OK:
         return pd.DataFrame()
     end_date   = datetime.today().strftime("%Y-%m-%d")
@@ -323,8 +355,7 @@ def _fetch_institutional_data(stock_id: str) -> pd.DataFrame:
     try:
         dl  = _FMDataLoader()
         raw = dl.taiwan_stock_institutional_investors(
-            stock_id=stock_id, start_date=start_date, end_date=end_date
-        )
+            stock_id=stock_id, start_date=start_date, end_date=end_date)
         if raw is None or raw.empty:
             return pd.DataFrame()
         raw["date"] = pd.to_datetime(raw["date"])
@@ -499,9 +530,26 @@ def _check_fundamental(label: str, data: dict) -> bool:
 
     # ── 獲利 ──────────────────────────────────────────────
     if label == "近 1 季，EPS 大於 0.5 元":
-        eps = _sg(info, "trailingEps"); return eps is not None and eps / 4 > 0.5
+        # trailingEps 為 TTM，除以 4 為平均季 EPS（最近一季無法從 info 直接取得）
+        eps = _sg(info, "trailingEps")
+        if eps is None: return False
+        # 嘗試從季度財報取最新單季 EPS
+        try:
+            _q = income  # annual financials; quarterly not cached here, fall back to TTM/4
+        except Exception:
+            pass
+        return eps / 4 > 0.5
     if label == "連續 3 年，平均 EPS 大於 1 元":
-        eps = _sg(info, "trailingEps"); return eps is not None and eps > 1.0
+        # 用年度財報的 Net Income 算 EPS 歷史（需要 shares）
+        shares = _sg(info, "sharesOutstanding")
+        if not shares or income is None or income.empty: return False
+        ni_row = next((r for r in income.index if "Net Income" in str(r)
+                       and "Minority" not in str(r) and "Noncontrolling" not in str(r)), None)
+        if ni_row is None: return False
+        ni_vals = income.loc[ni_row].dropna()
+        if len(ni_vals) < 3: return False
+        eps_hist = [float(ni_vals.iloc[i]) / shares for i in range(3)]
+        return all(e > 1.0 for e in eps_hist)
     if label == "連續 2 年，毛利率大於 5%":
         ms = _income_margin(income, "Gross Profit"); return len(ms) >= 2 and all(m > 5 for m in ms)
     if label == "連續 2 年，營業利益率大於 5%":
@@ -511,8 +559,14 @@ def _check_fundamental(label: str, data: dict) -> bool:
     if label == "連續 2 年，稅前淨利率大於 5%":
         ms = _income_margin(income, "Pretax Income"); return len(ms) >= 2 and all(m > 5 for m in ms)
     if label == "毛利率、營業利益率、純益率增加 1%":
-        gm = _sg(info, "grossMargins"); om = _sg(info, "operatingMargins"); pm = _sg(info, "profitMargins")
-        return gm is not None and om is not None and pm is not None and gm > 0 and om > 0 and pm > 0
+        # 需比較最近兩年；用 _income_margin 取兩期值再做差
+        gm_s = _income_margin(income, "Gross Profit")
+        om_s = _income_margin(income, "Operating Income")
+        pm_s = _income_margin(income, "Net Income")
+        if len(gm_s) < 2 or len(om_s) < 2 or len(pm_s) < 2: return False
+        return (gm_s[0] - gm_s[1] > 1.0 and
+                om_s[0] - om_s[1] > 1.0 and
+                pm_s[0] - pm_s[1] > 1.0)
     if label == "連續 2 年，平均股東權益報酬率大於 2%":
         roe = _sg(info, "returnOnEquity"); return roe is not None and roe * 100 > 2
     if label == "連續 2 年，資產報酬率大於 2%":
@@ -533,11 +587,23 @@ def _check_fundamental(label: str, data: dict) -> bool:
     if label == "速動比率(年)大於 100%":
         qr = _sg(info, "quickRatio"); return qr is not None and qr >= 1.0
     if label == "連續 2 年，自由現金流量大於 0 元(百萬)":
+        # 用現金流量表「Operating Cash Flow - CapEx」計算兩年 FCF
+        if cashflow is not None and not cashflow.empty:
+            ocf_row = next((r for r in cashflow.index if "Operating" in str(r) and "Cash" in str(r)), None)
+            cap_row = next((r for r in cashflow.index if "Capital" in str(r) and "Expenditure" in str(r)), None)
+            if ocf_row and cap_row:
+                ocf = cashflow.loc[ocf_row].dropna()
+                cap = cashflow.loc[cap_row].dropna()
+                n = min(len(ocf), len(cap))
+                if n >= 2:
+                    return all(float(ocf.iloc[i]) + float(cap.iloc[i]) > 0 for i in range(2))
+        # fallback：TTM FCF
         fcf = _sg(info, "freeCashflow"); return fcf is not None and fcf > 0
 
     # ── 個股資料 ─────────────────────────────────────────
     if label == "市值排名前 50 名":
-        mc = _sg(info, "marketCap"); return mc is not None and mc > 0
+        # universe 本身只有 18 檔，皆為市值前 50 大台股，直接通過
+        mc = _sg(info, "marketCap"); return mc is not None and mc > 1e10  # > 100 億才算大型股
     if label == "上市櫃超過 3 年":
         return True  # universe 內都是成熟上市公司
 
@@ -666,9 +732,10 @@ def real_stock_screener(selected_keys: list) -> tuple:
     stock_ids   = tuple(t.replace(".TW", "").replace(".TWO", "") for t, _ in _MOCK_POOL)
 
     # 批次預載（帶快取）；月營收條件也需要 info 作為備援
-    universe_ohlcv  = _fetch_universe_ohlcv(tickers)       if tech_labels              else {}
-    universe_fund   = _fetch_universe_fundamentals(tickers) if (fund_labels or rev_labels) else {}
-    universe_rev    = _fetch_universe_revenue(stock_ids)    if rev_labels               else {}
+    universe_ohlcv  = _fetch_universe_ohlcv(tickers)            if tech_labels              else {}
+    universe_fund   = _fetch_universe_fundamentals(tickers)      if (fund_labels or rev_labels) else {}
+    universe_rev    = _fetch_universe_revenue(stock_ids)         if rev_labels               else {}
+    universe_inst   = _fetch_universe_institutional(stock_ids)   if inst_labels              else {}
 
     rows = []
     total = len(_MOCK_POOL)
@@ -683,9 +750,9 @@ def real_stock_screener(selected_keys: list) -> tuple:
             if not all(_check_technical(lbl, universe_ohlcv.get(ticker)) for lbl in tech_labels):
                 continue
 
-        # 2. 法人籌碼
+        # 2. 法人籌碼（從批次快取取，不逐一打 API）
         if inst_labels:
-            raw = _fetch_institutional_data(stock_id)
+            raw = universe_inst.get(stock_id, pd.DataFrame())
             if not all(_check_institutional(lbl, raw) for lbl in inst_labels):
                 continue
 
@@ -884,16 +951,19 @@ def render_stock_screener():
     st.markdown('</div>', unsafe_allow_html=True)
 
     if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
-        watchlist = st.session_state.get("my_watchlist", [])
-        active    = st.session_state.get("active", None)
-        gen       = st.session_state.get("toggle_gen", 0)
+        watchlist   = st.session_state.get("my_watchlist", [])
+        active      = st.session_state.get("active", None)
+        invest_cur  = st.session_state.get("invest_cur", "TWD")
+        gen         = st.session_state.get("toggle_gen", 0)
+        _keep = {"my_watchlist", "active", "invest", "hold", "invest_cur"}
         for k in list(st.session_state.keys()):
-            if k not in ("my_watchlist", "active", "invest", "hold"):
+            if k not in _keep:
                 del st.session_state[k]
-        st.session_state.my_watchlist      = watchlist
-        st.session_state.screener_selected = set()
+        st.session_state.my_watchlist       = watchlist
+        st.session_state.invest_cur         = invest_cur
+        st.session_state.screener_selected  = set()
         st.session_state.screener_panel_open = True
-        st.session_state.toggle_gen        = gen + 1  # 新版本 → 所有 toggle 重建為 False
+        st.session_state.toggle_gen         = gen + 1
         if active is not None:
             st.session_state.active = active
         st.rerun()
@@ -1080,9 +1150,9 @@ def _render_watchlist():
         ticker = stock["ticker"]
         name   = stock["name"]
         try:
-            info  = yf.Ticker(ticker).info
-            price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
-            prev  = info.get("previousClose", price) or price
+            fi    = yf.Ticker(ticker).fast_info
+            price = float(fi.last_price or 0)
+            prev  = float(fi.previous_close or price)
             chg   = (price - prev) / prev * 100 if prev else 0.0
         except Exception:
             price, chg = 0.0, 0.0

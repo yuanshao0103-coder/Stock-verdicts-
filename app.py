@@ -676,10 +676,14 @@ if "active" not in st.session_state: st.session_state.active = ""
 if "invest"    not in st.session_state: st.session_state.invest    = 10000
 if "invest_cur" not in st.session_state: st.session_state.invest_cur = "TWD"
 if "hold" not in st.session_state:
-    st.session_state.hold = 63
+    st.session_state.hold = 90  # 預設 90 自然日（約 3 個月）
 elif isinstance(st.session_state.hold, str):
-    _old = {"1 個月":21,"3 個月":63,"6 個月":126,"1 年":252}
-    st.session_state.hold = _old.get(st.session_state.hold, 63)
+    _old = {"1 個月":30,"3 個月":90,"6 個月":180,"1 年":365}
+    st.session_state.hold = _old.get(st.session_state.hold, 90)
+elif int(st.session_state.hold) in (21, 63, 126, 252):
+    # 舊版交易日轉自然日
+    _td_to_nat = {21: 30, 63: 90, 126: 180, 252: 365}
+    st.session_state.hold = _td_to_nat[int(st.session_state.hold)]
 
 # 卡片連結導航：?active=TICKER → session_state
 _qp_active = st.query_params.get("active", "")
@@ -747,12 +751,9 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
                                 index=_cur_idx, horizontal=True, label_visibility="collapsed")
         st.session_state.invest_cur = _cur_options[_cur_choice]
     with p2:
-        # session_state.hold 舊版存交易日，遷移成自然日
-        _stored = int(st.session_state.hold)
-        _stored_nat = _stored if _stored > 60 else round(_stored / 21 * 30)
         hold_nat_input = st.number_input(
             "預計持有天數（自然日）", min_value=7, max_value=730,
-            value=_stored_nat, step=7)
+            value=int(st.session_state.hold), step=7)
         st.session_state.hold = int(hold_nat_input)
         _natural = int(hold_nat_input)
         if _natural < 14:
@@ -971,7 +972,7 @@ with v3:
 
 st.markdown(f"""
 <div style="text-align:center;font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">
-    投入 {invest_cur} {invest_amount:,} · 持有 {hold_days} 天 · 90% 落在 {p10_amt:+,.0f} ~ {p90_amt:+,.0f} {invest_cur}
+    投入 {invest_cur} {invest_amount:,} · 持有 {int(st.session_state.hold)} 自然日（≈{hold_days} 交易日） · 90% 落在 {p10_amt:+,.0f} ~ {p90_amt:+,.0f} {invest_cur}
 </div>
 """, unsafe_allow_html=True)
 
@@ -1376,7 +1377,8 @@ with tab_trade:
                 "value":f"正常 {vol_ratio:.1f}x","desc":"買賣均衡，籌碼穩定"})
 
         # ── 最終判決 ─────────────────────────────────────
-        if score >= 4:
+        # "投爆" 需要技術面高分 + MC 勝率同時達標，避免超賣反彈誤判
+        if score >= 4 and mc["win"] >= 60:
             verdict_label = "🔥 投爆"
             verdict_color = "#00A86B"
             verdict_bg    = "rgba(0,168,107,0.06)"
@@ -1471,16 +1473,17 @@ with tab_trade:
             batch_strat = "只放 3 成觀察倉，確認站穩再加碼"
 
         pos_pct = round(min(kelly * 0.5, kelly_cap) * 100)
-        pos_pct = max(pos_pct, 3)   # 最少 3%，避免顯示 0
+        _no_edge = kelly == 0.0  # Kelly=0 代表無統計優勢，不建議進場
 
         # 目標 & 止損
         # mu 上限鎖年化 35%，取中位數情境（z=0）；下限確保目標不低於現價
         _mu_capped   = min(mc["mu"], np.log(1.35) / 252)
         _raw_target  = mc["entry"] * np.exp((_mu_capped - 0.5 * mc["sigma"]**2) * hold_days)
-        target_price = max(_raw_target, price * 1.01)   # 至少比現價高 1%
+        _bearish     = mc["win"] < 45
+        target_price = None if _bearish else max(_raw_target, price * 1.01)
         stop_pct     = max(0.07, min(mc["sigma"] * np.sqrt(hold_days) * 1.0, 0.30))
         stop_price   = price * (1 - stop_pct)
-        target_pct   = (target_price / price - 1) * 100
+        target_pct   = (target_price / price - 1) * 100 if target_price else None
         stop_pct_show = stop_pct * 100
 
         with col_buy:
@@ -1497,8 +1500,9 @@ with tab_trade:
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">建議倉位</span>
-                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600">
-                        {pos_pct}% ≈ {invest_cur} {invest_amount * pos_pct / 100:,.0f}</span>
+                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600;
+                                 {"color:#E53935" if _no_edge else ""}">
+                        {"0%（無統計優勢，不建議進場）" if _no_edge else f"{pos_pct}% ≈ {invest_cur} {invest_amount * pos_pct / 100:,.0f}"}</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
@@ -1517,8 +1521,9 @@ with tab_trade:
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">目標賣出</span>
-                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600;color:#00A86B">
-                        {cur} {target_price:,.2f} (+{target_pct:.1f}%)</span>
+                    <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600;
+                                 {"color:#E53935" if _bearish else "color:#00A86B"}">
+                        {"模型偏空，不建議進場" if _bearish else f"{cur} {target_price:,.2f} (+{target_pct:.1f}%)"}</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
@@ -1642,7 +1647,7 @@ with tab_trade:
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
         # ── 週度投資機會圖 ────────────────────────────────
-        st.markdown(f"<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有 {hold_days} 天的歷史勝率</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有 {int(st.session_state.hold)} 自然日的歷史勝率</div>", unsafe_allow_html=True)
         try:
             import plotly.graph_objects as go_w
             _lh = get_long_history(active)
@@ -1661,7 +1666,7 @@ with tab_trade:
                 _d   = _close_s.index[_i]
                 _ret = _close_s.iloc[_i + hold_days] / _close_s.iloc[_i] - 1
                 _wn  = int(_d.isocalendar()[1])
-                if not (1 <= _wn <= 52):
+                if not (1 <= _wn <= 53):
                     continue
                 _fwd_map.setdefault(_wn, []).append(_ret > 0)
             # 週成交量（用於右軸）
@@ -1669,7 +1674,7 @@ with tab_trade:
             _wk_vol.index = pd.to_datetime(_wk_vol.index)
             for _idx, _v in _wk_vol.items():
                 _wn = int(_idx.isocalendar()[1])
-                if 1 <= _wn <= 52:
+                if 1 <= _wn <= 53:
                     _vol_map.setdefault(_wn, []).append(_v)
 
             _by_wk = pd.DataFrame([
@@ -1709,7 +1714,7 @@ with tab_trade:
                 opacity=0.85,
                 yaxis="y",
                 customdata=_custom,
-                hovertemplate=f"%{{customdata}} 買進、持有{hold_days}天<br>歷史獲利機率 %{{y:.1f}}%<extra></extra>",
+                hovertemplate=f"%{{customdata}} 買進、持有{int(st.session_state.hold)}自然日<br>歷史獲利機率 %{{y:.1f}}%<extra></extra>",
             ))
             _vol_unit  = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
             _vol_label = "千張" if _vol_unit == 1000 else "張"
