@@ -659,7 +659,8 @@ def get_quick_risk_status(ticker: str) -> dict:
 # ═══════════════════════════════════════════
 
 if "active" not in st.session_state: st.session_state.active = ""
-if "invest" not in st.session_state: st.session_state.invest = 10000
+if "invest"    not in st.session_state: st.session_state.invest    = 10000
+if "invest_cur" not in st.session_state: st.session_state.invest_cur = "TWD"
 if "hold" not in st.session_state:
     st.session_state.hold = 63
 elif isinstance(st.session_state.hold, str):
@@ -722,13 +723,14 @@ if search_btn and search_val.strip():
 with st.expander("⚙️ 投資參數設定", expanded=False):
     p1, p2 = st.columns(2)
     with p1:
-        _active_now = st.session_state.get("active", "")
-        _is_tw = _active_now.endswith(".TW") or _active_now.endswith(".TWO")
-        _invest_cur_label = "新台幣（TWD）" if _is_tw else "美元（USD）"
-        invest_amount = st.number_input("投入金額", min_value=100, max_value=10_000_000,
-                                         value=st.session_state.invest, step=1000, format="%d",
-                                         help=f"目前幣別：{_invest_cur_label}")
-        st.caption(f"幣別：{_invest_cur_label}")
+        _cur_options = {"新台幣 TWD": "TWD", "美元 USD": "USD"}
+        _cur_idx = list(_cur_options.values()).index(st.session_state.invest_cur) \
+                   if st.session_state.invest_cur in _cur_options.values() else 0
+        _cur_choice = st.radio("幣別", list(_cur_options.keys()),
+                                index=_cur_idx, horizontal=True, label_visibility="collapsed")
+        st.session_state.invest_cur = _cur_options[_cur_choice]
+        invest_amount = st.number_input(f"投入金額（{_cur_choice}）", min_value=100, max_value=10_000_000,
+                                         value=st.session_state.invest, step=1000, format="%d")
         st.session_state.invest = invest_amount
     with p2:
         hold_days_input = st.number_input(
@@ -746,8 +748,9 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
         else:
             _hold_label = f"約 {_natural/365:.1f} 年"
         st.caption(f"實際時間：{_hold_label}（{_hd} 個交易日 ≈ {_natural} 個自然日）")
-hold_days = int(st.session_state.hold)
+hold_days     = int(st.session_state.hold)
 invest_amount = st.session_state.invest
+invest_cur    = st.session_state.get("invest_cur", "TWD")  # 用戶選的幣別
 
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
@@ -945,12 +948,12 @@ with v3:
     <div class="card" style="text-align:center;padding:1.5rem 0.5rem">
         <div class="verdict-label">預測收益</div>
         <div class="verdict-number" style="color:{gc}">{gs}{exp_pct:.1f}<span style="font-size:2rem">%</span></div>
-        <div class="verdict-sub">{gs}${abs(exp_gain):,.0f}</div>
+        <div class="verdict-sub">{gs}{invest_cur} {abs(exp_gain):,.0f}</div>
     </div>""", unsafe_allow_html=True)
 
 st.markdown(f"""
 <div style="text-align:center;font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">
-    投入 {cur} {invest_amount:,} · 持有 {hold_days} 天 · 90% 落在 {p10_amt:+,.0f} ~ {p90_amt:+,.0f} {cur}
+    投入 {invest_cur} {invest_amount:,} · 持有 {hold_days} 天 · 90% 落在 {p10_amt:+,.0f} ~ {p90_amt:+,.0f} {invest_cur}
 </div>
 """, unsafe_allow_html=True)
 
@@ -1468,7 +1471,7 @@ with tab_trade:
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">建議倉位</span>
                     <span style="font-family:DM Mono,monospace;font-size:0.85rem;font-weight:600">
-                        {pos_pct}% ≈ {cur} {invest_amount * pos_pct / 100:,.0f}</span>
+                        {pos_pct}% ≈ {invest_cur} {invest_amount * pos_pct / 100:,.0f}</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
