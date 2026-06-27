@@ -1238,6 +1238,20 @@ with tab_trade:
             ideal_entry = price
             entry_note  = "現價附近可直接進場"
 
+        # MA20 狀態（判斷技術面與估值是否一致）
+        _ma20_val = df["Close"].rolling(20).mean().dropna()
+        _above_ma  = bool(df["Close"].iloc[-1] >= _ma20_val.iloc[-1]) if not _ma20_val.empty else True
+        if _above_ma:
+            ma_entry_note = "🟢 價格合理 + 趨勢向上，可考慮進場"
+            ma_entry_color = "#00A86B"
+        else:
+            ma_entry_note = "🔶 短期趨勢仍弱，建議等均線轉多再進場"
+            ma_entry_color = "#D97706"
+        entry_note_html = (
+            f'<div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">{entry_note}</div>'
+            f'<div style="font-size:0.72rem;color:{ma_entry_color};margin-top:0.3rem;line-height:1.5">{ma_entry_note}</div>'
+        )
+
         # Kelly 倉位
         win_p  = mc["win"] / 100
         loss_p = mc["loss"] / 100
@@ -1278,7 +1292,7 @@ with tab_trade:
                     <span style="font-size:0.8rem;color:#6B7280">分批策略</span>
                     <span style="font-size:0.8rem;font-weight:600">50% 進 → 跌5% 加50%</span>
                 </div>
-                <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">{entry_note}</div>
+                {entry_note_html}
             </div>
             """, unsafe_allow_html=True)
 
