@@ -687,7 +687,7 @@ if not st.session_state.active:
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     st.markdown(f"""
-                    <a href="javascript:void(0)" onclick="(function(){{var u=new URL(window.top.location.href);u.searchParams.set('active','{q['ticker']}');window.top.location.href=u.href;}})()" style="text-decoration:none;display:block;margin-bottom:0.3rem;cursor:pointer">
+                    <a href="javascript:void(0)" onclick="(function(){{window.parent.location.href='?active={q['ticker']}';}})()" style="text-decoration:none;display:block;margin-bottom:0.3rem;cursor:pointer">
                       <div style="background:#fff;border:2px solid {bdr};border-radius:14px;
                                   padding:0.85rem 1rem;min-height:108px;
                                   transition:box-shadow 0.15s,transform 0.12s">
