@@ -573,9 +573,22 @@ def _fetch_universe_revenue(stock_ids: tuple) -> dict:
     return result
 
 
-def _check_revenue(label: str, rev_df) -> bool:
+def _check_revenue(label: str, rev_df, info_fallback: dict = None) -> bool:
+    """FinMind 月營收資料不可用時，以 yfinance revenueGrowth 備援。"""
     if rev_df is None or (hasattr(rev_df, "empty") and rev_df.empty):
-        return False
+        if info_fallback:
+            rg = _sg(info_fallback, "revenueGrowth")  # YoY revenue growth (annual)
+            if rg is None:
+                return True  # 無法驗證，不過濾
+            if label == "月營收成長":
+                return rg > 0
+            if label == "近 1 個月，營收年增率大於 10%":
+                return rg * 100 > 10
+            if label in ("月營收年增率連續 3 月成長", "月營收創近 6 月新高"):
+                return rg > 0
+            if label in ("月營收 3MA 穿越 12MA", "短期營收年增率大於長期營收年增率 10% 以上"):
+                return rg * 100 > 10
+        return True  # 資料完全不可用時，不過濾（避免 0 結果）
     df = rev_df
     rev_col = next((c for c in ["revenue", "Revenue"] if c in df.columns), None)
     if rev_col is None:
@@ -650,10 +663,10 @@ def real_stock_screener(selected_keys: list) -> tuple:
     tickers     = tuple(t for t, _ in _MOCK_POOL)
     stock_ids   = tuple(t.replace(".TW", "").replace(".TWO", "") for t, _ in _MOCK_POOL)
 
-    # 批次預載（帶快取）
-    universe_ohlcv  = _fetch_universe_ohlcv(tickers)       if tech_labels  else {}
-    universe_fund   = _fetch_universe_fundamentals(tickers) if fund_labels  else {}
-    universe_rev    = _fetch_universe_revenue(stock_ids)    if rev_labels   else {}
+    # 批次預載（帶快取）；月營收條件也需要 info 作為備援
+    universe_ohlcv  = _fetch_universe_ohlcv(tickers)       if tech_labels              else {}
+    universe_fund   = _fetch_universe_fundamentals(tickers) if (fund_labels or rev_labels) else {}
+    universe_rev    = _fetch_universe_revenue(stock_ids)    if rev_labels               else {}
 
     rows = []
     total = len(_MOCK_POOL)
@@ -681,10 +694,11 @@ def real_stock_screener(selected_keys: list) -> tuple:
             if not all(_check_fundamental(lbl, fdata) for lbl in fund_labels):
                 continue
 
-        # 4. 月營收
+        # 4. 月營收（FinMind 不可用時用 yfinance revenueGrowth 備援）
         if rev_labels:
-            rev_df = universe_rev.get(stock_id)
-            if not all(_check_revenue(lbl, rev_df) for lbl in rev_labels):
+            rev_df   = universe_rev.get(stock_id)
+            info_fb  = universe_fund.get(ticker, {}).get("info", {})
+            if not all(_check_revenue(lbl, rev_df, info_fb) for lbl in rev_labels):
                 continue
 
         # 5. 取最新報價
