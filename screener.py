@@ -848,6 +848,39 @@ def render_stock_screener():
         </div>
         """, unsafe_allow_html=True)
 
+    # ── 直接搜尋股號加入清單 ────────────────────────────────
+    st.markdown("<hr style='border-color:#E8EAED;margin:1.25rem 0 0.75rem'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.78rem;font-weight:700;color:#374151;margin-bottom:0.5rem'>🔎 直接輸入股號加入自選清單</div>", unsafe_allow_html=True)
+    _sq_col, _sq_btn = st.columns([4, 1])
+    with _sq_col:
+        _sq_val = st.text_input("輸入股號（如 2330、AAPL、00878）",
+                                 key="watchlist_search_input", label_visibility="collapsed",
+                                 placeholder="輸入股號，如 2330、TSLA、00878…")
+    with _sq_btn:
+        _sq_add = st.button("加入清單", key="watchlist_search_btn", use_container_width=True)
+
+    if _sq_add and _sq_val.strip():
+        import re as _re
+        _t = _sq_val.strip().upper()
+        if _re.match(r"^\d{4,6}[A-Z]?$", _t):
+            _t = _t + ".TW"
+        _wl_tickers = {s["ticker"] for s in st.session_state.my_watchlist}
+        if _t in _wl_tickers:
+            st.info(f"{_t} 已在清單中")
+        else:
+            try:
+                _sq_info = yf.Ticker(_t).fast_info
+                _sq_price = float(getattr(_sq_info, "last_price", 0) or 0)
+                if _sq_price > 0:
+                    _sq_name = yf.Ticker(_t).info.get("shortName", _t)
+                    st.session_state.my_watchlist.append({"ticker": _t, "name": _sq_name})
+                    st.success(f"✅ 已加入：{_t}（{_sq_name}）")
+                    st.rerun()
+                else:
+                    st.error(f"找不到 {_t}，請確認股號是否正確")
+            except Exception:
+                st.error(f"找不到 {_t}，請確認股號是否正確")
+
     _render_watchlist()
 
 
