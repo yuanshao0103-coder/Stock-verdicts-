@@ -1252,14 +1252,30 @@ with tab_trade:
             f'<div style="font-size:0.72rem;color:{ma_entry_color};margin-top:0.3rem;line-height:1.5">{ma_entry_note}</div>'
         )
 
-        # Kelly 倉位
+        # Kelly 倉位 + 波動率調整
         win_p  = mc["win"] / 100
         loss_p = mc["loss"] / 100
         avg_w  = max(mc["p90"] / 100, 0.01)
         avg_l  = max(abs(mc["p10"]) / 100, 0.01)
-        kelly  = max(0.0, min((win_p * avg_w - loss_p * avg_l) / avg_w, 0.30))
-        half_kelly = kelly * 0.5
-        pos_pct = round(half_kelly * 100)
+        kelly  = max(0.0, (win_p * avg_w - loss_p * avg_l) / avg_w)
+        ann_vol = mc["sigma"] * np.sqrt(252)  # 年化波動率
+
+        # 依波動率決定上限與分批策略
+        if ann_vol < 0.20:          # 低波動（< 20%）
+            kelly_cap   = 0.25
+            batch_strat = "一次進場即可，波動小不用分批"
+        elif ann_vol < 0.35:        # 中波動（20-35%）
+            kelly_cap   = 0.20
+            batch_strat = "50% 先進 → 跌 5% 再加 50%"
+        elif ann_vol < 0.50:        # 高波動（35-50%）
+            kelly_cap   = 0.12
+            batch_strat = "30% 先進 → 跌 8% 加 40% → 再跌 8% 加 30%"
+        else:                       # 超高波動（> 50%）
+            kelly_cap   = 0.06
+            batch_strat = "只放 3 成觀察倉，確認站穩再加碼"
+
+        pos_pct = round(min(kelly * 0.5, kelly_cap) * 100)
+        pos_pct = max(pos_pct, 3)   # 最少 3%，避免顯示 0
 
         # 目標 & 止損
         target_price = mc["entry"] * np.exp(
@@ -1290,7 +1306,7 @@ with tab_trade:
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">分批策略</span>
-                    <span style="font-size:0.8rem;font-weight:600">50% 進 → 跌5% 加50%</span>
+                    <span style="font-size:0.8rem;font-weight:600">{batch_strat}</span>
                 </div>
                 {entry_note_html}
             </div>
