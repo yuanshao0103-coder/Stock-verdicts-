@@ -1278,9 +1278,10 @@ with tab_trade:
         pos_pct = max(pos_pct, 3)   # 最少 3%，避免顯示 0
 
         # 目標 & 止損
+        # mu 上限鎖年化 20%，避免歷史牛市把預測拉爆；取中位數（z=0）而非 90 百分位
+        _mu_capped = min(mc["mu"], np.log(1.20) / 252)
         target_price = mc["entry"] * np.exp(
-            (mc["mu"] - 0.5 * mc["sigma"]**2) * hold_days
-            + mc["sigma"] * np.sqrt(hold_days) * 1.28)
+            (_mu_capped - 0.5 * mc["sigma"]**2) * hold_days)
         stop_pct    = max(0.07, mc["sigma"] * np.sqrt(21) * 1.5)  # 1.5σ 月波動
         stop_price  = price * (1 - stop_pct)
         target_pct  = (target_price / price - 1) * 100
