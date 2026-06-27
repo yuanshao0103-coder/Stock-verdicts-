@@ -596,7 +596,7 @@ if "hold"   not in st.session_state: st.session_state.hold   = "3 個月"
 
 # 卡片連結導航：?active=TICKER → session_state
 _qp_active = st.query_params.get("active", "")
-if _qp_active and not st.session_state.active:
+if _qp_active and _qp_active != st.session_state.active:
     st.session_state.active = _qp_active
 
 
@@ -687,7 +687,7 @@ if not st.session_state.active:
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     st.markdown(f"""
-                    <a href="?active={q['ticker']}" target="_top" style="text-decoration:none;display:block;margin-bottom:0.3rem">
+                    <a href="javascript:void(0)" onclick="(function(){{var u=new URL(window.top.location.href);u.searchParams.set('active','{q['ticker']}');window.top.location.href=u.href;}})()" style="text-decoration:none;display:block;margin-bottom:0.3rem;cursor:pointer">
                       <div style="background:#fff;border:2px solid {bdr};border-radius:14px;
                                   padding:0.85rem 1rem;min-height:108px;
                                   transition:box-shadow 0.15s,transform 0.12s">
