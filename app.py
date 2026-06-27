@@ -687,7 +687,7 @@ if not st.session_state.active:
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     st.markdown(f"""
-                    <a href="?active={q['ticker']}" style="text-decoration:none;display:block;margin-bottom:0.3rem">
+                    <a href="?active={q['ticker']}" target="_top" style="text-decoration:none;display:block;margin-bottom:0.3rem">
                       <div style="background:#fff;border:2px solid {bdr};border-radius:14px;
                                   padding:0.85rem 1rem;min-height:108px;
                                   transition:box-shadow 0.15s,transform 0.12s">
@@ -944,7 +944,7 @@ with tab_news:
                     _fw      = "600" if _is_sel else "400"
                     _tc      = "#1D4ED8" if _is_sel else "#374151"
                     _list_html += f"""
-                    <a href="?active={active}&ns={_i}&tab=news" style="text-decoration:none;display:block">
+                    <a href="?active={active}&ns={_i}&tab=news" target="_top" style="text-decoration:none;display:block">
                       <div style="padding:0.35rem 0.4rem 0.35rem 0.5rem;background:{_bg};
                                   border-bottom:1px solid #EAECEF;border-left:{_bl}">
                         <div style="font-size:0.71rem;font-weight:{_fw};color:{_tc};
