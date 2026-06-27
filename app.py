@@ -679,7 +679,7 @@ if not st.session_state.active:
         st.markdown("""<style>
 [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button{
     background:transparent!important;border:none!important;
-    box-shadow:none!important;min-height:120px!important;cursor:pointer!important;
+    box-shadow:none!important;min-height:140px!important;cursor:pointer!important;
 }
 [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button:hover,
 [data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"] .stButton>button:focus,
@@ -691,31 +691,48 @@ if not st.session_state.active:
             stocks = load_stocks(tickers)
         rows = [stocks[i:i+2] for i in range(0, len(stocks), 2)]
         for row_idx, pair in enumerate(rows):
-            bdr = _ROW_BORDERS[row_idx % len(_ROW_BORDERS)]
             cols = st.columns(2)
             for col, q in zip(cols, pair):
                 chg   = q["chg_pct"]
                 arrow = "▲" if chg >= 0 else "▼"
-                cn    = q.get("cn_name", "")
+                cn    = q.get("cn_name", "") or q["ticker"].replace(".TW","").replace(".TWO","")
                 cur   = q.get("currency", "TWD")
                 risk  = get_quick_risk_status(q["ticker"])
-                ticker_disp = q["ticker"].replace(".TW", "")
+                ticker_disp = q["ticker"].replace(".TW","").replace(".TWO","")
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
+                chg_bg    = "rgba(0,168,107,0.10)" if chg >= 0 else "rgba(229,57,53,0.10)"
                 with col:
                     safe_id = q['ticker'].replace('.','_').replace('-','_')
-                    # Button FIRST (transparent via CSS, 120px tall)
+                    # Button FIRST (transparent via CSS, 140px tall)
                     if st.button(" ", key=f"nav_{safe_id}", use_container_width=True):
                         st.session_state.active = q['ticker']
                         st.rerun()
-                    # Card HTML overlaid on top with negative margin; pointer-events:none passes clicks through to button
+                    # Card HTML overlaid on top; pointer-events:none passes clicks through to button
                     st.markdown(f"""
-<div style="margin-top:-130px;position:relative;z-index:2;pointer-events:none;
-  background:#fff;border:2px solid {bdr};border-radius:14px;
-  padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem">
-  <div style="font-size:.67rem;font-weight:600;color:{risk['color']};margin-bottom:.28rem">{risk['emoji']} {risk['label']}</div>
-  <div style="font-size:.86rem;font-weight:700;color:#111;margin-bottom:.12rem">{ticker_disp}&nbsp;<span style="font-weight:400;color:#6B7280;font-size:.78rem">{cn}</span></div>
-  <div style="font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;color:#111;margin-bottom:.06rem">{cur} {q['price']:,.1f}</div>
-  <div style="font-size:.83rem;font-weight:600;color:{chg_color}">{arrow} {abs(chg):.2f}%</div>
+<div style="margin-top:-150px;position:relative;z-index:2;pointer-events:none;
+  background:#fff;border:1px solid #E8EAED;border-radius:16px;
+  padding:1rem 1.1rem;min-height:130px;margin-bottom:0.4rem;
+  box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.45rem">
+    <div style="display:flex;align-items:center;gap:0.3rem">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+                   background:{risk['color']};flex-shrink:0"></span>
+      <span style="font-size:0.68rem;font-weight:600;color:{risk['color']}">{risk['label']}</span>
+    </div>
+    <span style="font-size:0.72rem;color:#9CA3AF;font-weight:500">{ticker_disp}</span>
+  </div>
+  <div style="font-size:1rem;font-weight:700;color:#111;margin-bottom:0.25rem;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{cn}</div>
+  <div style="margin-bottom:0.5rem">
+    <span style="font-family:'DM Mono',monospace;font-size:1.08rem;font-weight:700;color:#111">
+      {q['price']:,.1f}</span>
+    <span style="font-size:0.72rem;color:#6B7280;margin-left:0.25rem">{cur}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="background:{chg_bg};color:{chg_color};font-size:0.78rem;font-weight:600;
+                 padding:0.18rem 0.6rem;border-radius:20px">{arrow} {abs(chg):.2f}%</span>
+    <span style="color:#D1D5DB;font-size:1rem;font-weight:300">→</span>
+  </div>
 </div>""", unsafe_allow_html=True)
 
     with tab_tw:
