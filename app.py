@@ -22,7 +22,7 @@ st.set_page_config(
 tw_tz  = pytz.timezone("Asia/Taipei")
 now_tw = datetime.now(tw_tz)
 
-# ── 每 30 秒自動刷新（JS 計時器，避免 yfinance 限流）──
+# ── 每 5 分鐘自動刷新（JS 計時器，避免 yfinance 限流）──
 st.markdown(
     "<script>setTimeout(function(){window.parent.location.reload();}, 300000);</script>",
     unsafe_allow_html=True,
@@ -682,7 +682,7 @@ st.markdown(f"""
   <div style='font-size:1.3rem;font-weight:700;letter-spacing:-0.02em'>💰 沅劭帶你賺大錢</div>
   <div style='text-align:right'>
     <div style='font-size:0.72rem;color:#9CA3AF;font-family:DM Mono,monospace'>🇹🇼 {now_tw.strftime('%H:%M:%S')}</div>
-    <div style='font-size:0.62rem;color:#C4C9D4'>● 每 30 秒自動更新</div>
+    <div style='font-size:0.62rem;color:#C4C9D4'>● 每 5 分鐘自動更新</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -698,13 +698,19 @@ with st.form(key="search_form", clear_on_submit=False):
 
 def normalize_ticker(raw: str) -> str:
     """
-    去空格、轉大寫；
-    若輸入是純數字（台股代號），自動補 .TW（上市），
-    後續若抓不到再 fallback 到 .TWO（上櫃）。
+    標準化 ticker：
+    - 純數字 → 上市 .TW（如 2330 → 2330.TW）
+    - 數字+英文字母 → 上市 .TW（如 00878 → 00878.TW）
+    - 已有 .TW / .TWO → 保留
+    - 英文字母 → 美股，直接大寫
     """
-    t = raw.replace(" ", "").upper()
-    if t.isdigit():
-        t = t + ".TW"
+    t = raw.strip().upper()
+    if t.endswith(".TW") or t.endswith(".TWO"):
+        return t
+    # 台股代號：4-6 位數字、或數字開頭帶英文後綴（如 00878B）
+    import re as _re
+    if _re.match(r"^\d{4,6}[A-Z]?$", t):
+        return t + ".TW"
     return t
 
 if search_btn and search_val.strip():
@@ -729,6 +735,17 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
             "預計持有天數（交易日）", min_value=5, max_value=504,
             value=int(st.session_state.hold), step=5)
         st.session_state.hold = int(hold_days_input)
+        _hd = int(hold_days_input)
+        _natural = round(_hd / 21 * 30)  # 交易日換算自然日
+        if _natural < 14:
+            _hold_label = f"約 {_natural} 天"
+        elif _natural < 60:
+            _hold_label = f"約 {round(_natural/7)} 週"
+        elif _natural < 365:
+            _hold_label = f"約 {round(_natural/30)} 個月"
+        else:
+            _hold_label = f"約 {_natural/365:.1f} 年"
+        st.caption(f"實際時間：{_hold_label}（{_hd} 個交易日 ≈ {_natural} 個自然日）")
 hold_days = int(st.session_state.hold)
 invest_amount = st.session_state.invest
 
@@ -1323,7 +1340,7 @@ with tab_trade:
         elif vol_ratio < 0.6:
             score += 1
             reasons.append({"label":"買賣熱度","status":"warn",
-                "value":f"縮量 {vol_ratio:.1f}x","desc":"成交量萎縮，市場在醞釀，大波動快來了"})
+                "value":f"縮量 {vol_ratio:.1f}x","desc":"市場安靜蓄力，籌碼沉澱中，通常是行情啟動前的準備期"})
         else:
             reasons.append({"label":"買賣熱度","status":"good",
                 "value":f"正常 {vol_ratio:.1f}x","desc":"買賣均衡，籌碼穩定"})
@@ -1493,7 +1510,8 @@ with tab_trade:
 
         # ── 何時買何時賣（MA 圖）────────────────────────
         st.markdown("<div style='font-size:0.88rem;font-weight:700;color:#111;margin-bottom:.2rem'>📍 何時買？何時賣？</div>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size:0.73rem;color:#6B7280;margin-bottom:.5rem'>黃線是關鍵分界。股價從下方穿越黃線 → 可考慮買入 ▲；股價跌破黃線往下 → 不管賺賠都要出場 ▼　　右上角顯示該時間點建議操作。</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:0.73rem;color:#6B7280;margin-bottom:.3rem'>黃線（20日均線）是短線進場分界：股價穿越黃線往上 → 可考慮買入 ▲；跌破黃線往下 → 不管賺賠都要出場 ▼</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:0.68rem;color:#9CA3AF;margin-bottom:.5rem'>📌 注意：上方「大趨勢」用的是 200 日年線（長期方向），這張圖用的是 20 日均線（短線時機）。兩者角色不同，同時參考最準確。</div>", unsafe_allow_html=True)
         try:
             import plotly.graph_objects as _go2
             import json as _json2
