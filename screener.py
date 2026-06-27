@@ -26,10 +26,15 @@ except ImportError:
 _CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 
 
+_CACHE_MAX_AGE_HOURS = 8  # 快取超過此時數自動視為過期
+
 def _load_cache(filename: str):
-    """讀取本地快取，不存在回傳 None。"""
+    """讀取本地快取；不存在或超過 _CACHE_MAX_AGE_HOURS 小時回傳 None。"""
     path = os.path.join(_CACHE_DIR, filename)
     if os.path.exists(path):
+        age_hours = (datetime.now().timestamp() - os.path.getmtime(path)) / 3600
+        if age_hours > _CACHE_MAX_AGE_HOURS:
+            return None
         with open(path, "rb") as f:
             return pickle.load(f)
     return None
