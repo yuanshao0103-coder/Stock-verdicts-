@@ -762,6 +762,27 @@ def _inject_screener_css():
     .cond-real  { display:inline-block; background:#D1FAE5; color:#065F46; border-radius:20px; padding:2px 10px; font-size:0.72rem; font-weight:600; }
     .run-screen button { background:linear-gradient(135deg,#2563EB,#1D4ED8) !important; color:#FFF !important; font-size:1rem !important; font-weight:700 !important; padding:0.85rem !important; border-radius:12px !important; box-shadow:0 4px 16px rgba(37,99,235,0.25) !important; }
     .result-head { font-size:0.95rem; font-weight:700; margin:1.25rem 0 0.75rem; display:flex; align-items:center; gap:0.5rem; }
+    /* ── 緊湊排版：篩選結果 & 自選股 ── */
+    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) {
+        gap: 0.25rem !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .hot-chip {
+        padding: 0.35rem 0.65rem !important;
+        margin-bottom: 0 !important;
+        border-radius: 8px !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .stButton > button {
+        height: 1.75rem !important;
+        min-height: unset !important;
+        padding: 0 0.4rem !important;
+        font-size: 0.73rem !important;
+        line-height: 1 !important;
+        border-radius: 6px !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) [data-testid="stMarkdownContainer"] p {
+        margin: 0 !important;
+        line-height: 1.2 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1000,22 +1021,22 @@ def _render_results(selected_keys: list):
         arrow   = "▲" if chg >= 0 else "▼"
         in_list = ticker in watchlist_tickers
 
-        left, right = st.columns([5, 1.5])
+        left, right = st.columns([5, 1.2])
         with left:
             st.markdown(f"""
-            <div class="hot-chip" style="margin-bottom:0.1rem">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div class="hot-chip sc-row-marker" style="margin-bottom:0">
+                <div style="display:flex;justify-content:space-between;align-items:center">
                     <div><span class="hot-ticker">{ticker}</span>&nbsp;<span class="hot-cn">{name}</span></div>
                     <div style="text-align:right">
-                        <div class="hot-price {color}">{price:,.2f}</div>
-                        <div class="{color}" style="font-size:0.8rem;font-weight:600">{arrow} {abs(chg):.2f}%</div>
+                        <div class="hot-price {color}" style="font-size:0.9rem">{price:,.2f}</div>
+                        <div class="{color}" style="font-size:0.75rem;font-weight:600">{arrow} {abs(chg):.2f}%</div>
                     </div>
                 </div>
             </div>""", unsafe_allow_html=True)
         with right:
             if in_list:
-                st.markdown("<div style='text-align:center;padding:0.7rem 0;font-size:0.8rem;"
-                            "color:#00A86B;font-weight:700'>✓ 已加入</div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align:center;font-size:0.75rem;"
+                            "color:#00A86B;font-weight:700;padding:0.25rem 0'>✓ 已加入</div>", unsafe_allow_html=True)
             else:
                 if st.button("＋ 加入", key=f"add_{ticker}", use_container_width=True):
                     st.session_state.my_watchlist.append({"ticker": ticker, "name": name})
@@ -1050,15 +1071,15 @@ def _render_watchlist():
         color = "pos" if chg >= 0 else "neg"
         arrow = "▲" if chg >= 0 else "▼"
 
-        col_info, col_analyze, col_remove = st.columns([5, 1.5, 1.5])
+        col_info, col_analyze, col_remove = st.columns([5, 1.2, 1])
         with col_info:
             st.markdown(f"""
-            <div class="hot-chip" style="margin-bottom:0.1rem">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div class="hot-chip sc-row-marker" style="margin-bottom:0">
+                <div style="display:flex;justify-content:space-between;align-items:center">
                     <div><span class="hot-ticker">{ticker}</span>&nbsp;<span class="hot-cn">{name}</span></div>
                     <div style="text-align:right">
-                        <div class="hot-price {color}">{price:,.2f}</div>
-                        <div class="{color}" style="font-size:0.8rem;font-weight:600">{arrow} {abs(chg):.2f}%</div>
+                        <div class="hot-price {color}" style="font-size:0.9rem">{price:,.2f}</div>
+                        <div class="{color}" style="font-size:0.75rem;font-weight:600">{arrow} {abs(chg):.2f}%</div>
                     </div>
                 </div>
             </div>""", unsafe_allow_html=True)
@@ -1067,6 +1088,7 @@ def _render_watchlist():
                 st.session_state.active = ticker
                 st.rerun(scope="app")
         with col_remove:
-            if st.button("移除", key=f"remove_{ticker}_{i}", use_container_width=True):
+            if st.button("✕", key=f"remove_{ticker}_{i}", use_container_width=True,
+                         help="從自選清單移除"):
                 st.session_state.my_watchlist = [s for s in wl if s["ticker"] != ticker]
                 st.rerun()
