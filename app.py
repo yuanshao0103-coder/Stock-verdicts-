@@ -966,70 +966,6 @@ with tab_chart:
     except Exception as _e:
         st.warning(f"K線圖錯誤：{_e}")
 
-    # ── 買賣時機圖 ────────────────────────────────────────────
-    st.markdown("<div style='font-size:0.88rem;font-weight:700;color:#E0E0E0;margin:1rem 0 0.25rem'>📍 何時買？何時賣？</div>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:0.75rem;color:#9CA3AF;margin-bottom:0.5rem'>黃線是關鍵分界。股價從下方穿越黃線 → 可考慮買入 ▲；股價跌破黃線往下 → 不管賺賠都要出場 ▼</div>", unsafe_allow_html=True)
-    try:
-        _ma = _df["Close"].rolling(20).mean()
-        # 目前狀態
-        _cur_p = _df["Close"].iloc[-1]; _cur_ma = _ma.dropna().iloc[-1]
-        if _cur_p >= _cur_ma:
-            st.markdown(f"<div style='font-size:.82rem;font-weight:700;color:#00C853;margin-bottom:.4rem'>🟢 目前股價在黃線上方，持倉安全</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div style='font-size:.82rem;font-weight:700;color:#FF1744;margin-bottom:.4rem'>🔴 目前股價跌破黃線，建議先出場觀望</div>", unsafe_allow_html=True)
-
-        # 填色：價格與 MA 之間 — 綠=安全、紅=危險
-        _max_c = _df["Close"].clip(lower=_ma)  # 價格在 MA 上方時 = 價格，否則 = MA
-        _min_c = _df["Close"].clip(upper=_ma)  # 價格在 MA 下方時 = 價格，否則 = MA
-
-        _fig_exit = _go.Figure()
-        # 基準線 MA
-        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_ma,name="買賣分界線",
-            line=dict(color="#F9A825",width=2.5),showlegend=True))
-        # 綠色填色（價格 > MA 區域）
-        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_max_c,name="安全區（持倉）",
-            fill="tonexty",fillcolor="rgba(0,200,83,0.18)",
-            line=dict(width=0),showlegend=True))
-        # 重置基準，再填紅色（價格 < MA 區域）
-        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_ma,
-            line=dict(width=0),showlegend=False,hoverinfo="skip"))
-        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_min_c,name="危險區（出場）",
-            fill="tonexty",fillcolor="rgba(255,50,50,0.22)",
-            line=dict(width=0),showlegend=True))
-        # 股價線
-        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_df["Close"],name="股價",
-            line=dict(color="#FFFFFF",width=1.8),showlegend=True))
-        # 買入訊號（股價從下方穿越 MA）
-        _entry_m = (_df["Close"] >= _ma) & (_df["Close"].shift(1) < _ma.shift(1))
-        _entry_m = _entry_m.fillna(False)
-        _ex = _df.index[_entry_m]; _ey = _df["Close"][_entry_m]
-        if len(_ex):
-            _fig_exit.add_trace(_go.Scatter(x=_ex,y=_ey*0.988,mode="markers",name="建議買入 ▲",
-                marker=dict(color="#00C853",size=11,symbol="triangle-up"),
-                hovertemplate="%{x|%Y-%m-%d}<br>買入參考 %{customdata:,.1f}<extra></extra>",
-                customdata=_df["Close"][_entry_m].values))
-        # 出場訊號（股價從上方跌破 MA）
-        _exit_m = (_df["Close"] < _ma) & (_df["Close"].shift(1) >= _ma.shift(1))
-        _exit_m = _exit_m.fillna(False)
-        _sx = _df.index[_exit_m]; _sy = _df["Close"][_exit_m]
-        if len(_sx):
-            _fig_exit.add_trace(_go.Scatter(x=_sx,y=_sy*1.012,mode="markers",name="建議出場 ▼",
-                marker=dict(color="#FF1744",size=11,symbol="triangle-down"),
-                hovertemplate="%{x|%Y-%m-%d}<br>出場參考 %{customdata:,.1f}<extra></extra>",
-                customdata=_df["Close"][_exit_m].values))
-        _fig_exit.update_layout(
-            height=360,paper_bgcolor="#111",plot_bgcolor="#111",
-            font=dict(family="DM Sans",color="#888",size=11),
-            hovermode="x unified",
-            legend=dict(orientation="h",yanchor="bottom",y=1.01,bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#aaa"),traceorder="normal"),
-            margin=dict(l=0,r=55,t=8,b=0),
-            xaxis=dict(showgrid=False,zeroline=False,color="#555"),
-            yaxis=dict(gridcolor="#1e1e1e",zeroline=False,side="right",color="#888"))
-        st.plotly_chart(_fig_exit,use_container_width=True)
-    except Exception as _e:
-        st.warning(f"買賣圖錯誤：{_e}")
-
 with tab_news:
     col_n, col_f = st.columns([3, 2])
 
@@ -1386,6 +1322,10 @@ with tab_trade:
             _t_safe_now = bool(_tdf["Close"].iloc[-1] >= _tma.dropna().iloc[-1])
             _t_badge_txt   = "<b>買</b>" if _t_safe_now else "<b>賣</b>"
             _t_badge_color = "#00C853"   if _t_safe_now else "#FF1744"
+            if _t_safe_now:
+                st.markdown("<div style='font-size:.82rem;font-weight:700;color:#00C853;margin-bottom:.4rem'>🟢 目前股價在黃線上方，持倉安全</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='font-size:.82rem;font-weight:700;color:#FF1744;margin-bottom:.4rem'>🔴 目前股價跌破黃線，建議先出場觀望</div>", unsafe_allow_html=True)
             _t_max_c = _tdf["Close"].clip(lower=_tma)
             _t_min_c = _tdf["Close"].clip(upper=_tma)
             _t_fig = _go2.Figure()
