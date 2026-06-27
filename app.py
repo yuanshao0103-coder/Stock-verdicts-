@@ -726,12 +726,12 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
         _cur_options = {"新台幣 TWD": "TWD", "美元 USD": "USD"}
         _cur_idx = list(_cur_options.values()).index(st.session_state.invest_cur) \
                    if st.session_state.invest_cur in _cur_options.values() else 0
+        invest_amount = st.number_input("投入金額", min_value=100, max_value=10_000_000,
+                                         value=st.session_state.invest, step=1000, format="%d")
+        st.session_state.invest = invest_amount
         _cur_choice = st.radio("幣別", list(_cur_options.keys()),
                                 index=_cur_idx, horizontal=True, label_visibility="collapsed")
         st.session_state.invest_cur = _cur_options[_cur_choice]
-        invest_amount = st.number_input(f"投入金額（{_cur_choice}）", min_value=100, max_value=10_000_000,
-                                         value=st.session_state.invest, step=1000, format="%d")
-        st.session_state.invest = invest_amount
     with p2:
         hold_days_input = st.number_input(
             "預計持有天數（交易日）", min_value=5, max_value=504,
