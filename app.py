@@ -593,7 +593,7 @@ def get_quick_risk_status(ticker: str) -> dict:
 
 if "active" not in st.session_state: st.session_state.active = ""
 if "invest" not in st.session_state: st.session_state.invest = 10000
-if "hold"   not in st.session_state: st.session_state.hold   = "3 個月"
+if "hold"   not in st.session_state: st.session_state.hold   = 63
 
 # 卡片連結導航：?active=TICKER → session_state
 _qp_active = st.query_params.get("active", "")
@@ -649,12 +649,11 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
                                          value=st.session_state.invest, step=1000, format="%d")
         st.session_state.invest = invest_amount
     with p2:
-        hold_map = {"1 個月":21, "3 個月":63, "6 個月":126, "1 年":252}
-        hold_choice = st.selectbox("預計持有時間", list(hold_map.keys()),
-                                    index=list(hold_map.keys()).index(st.session_state.hold))
-        st.session_state.hold = hold_choice
-hold_map  = {"1 個月":21, "3 個月":63, "6 個月":126, "1 年":252}
-hold_days = hold_map[st.session_state.hold]
+        hold_days_input = st.number_input(
+            "預計持有天數（交易日）", min_value=5, max_value=504,
+            value=int(st.session_state.hold), step=5)
+        st.session_state.hold = int(hold_days_input)
+hold_days = int(st.session_state.hold)
 invest_amount = st.session_state.invest
 
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
@@ -841,7 +840,7 @@ with v3:
 
 st.markdown(f"""
 <div style="text-align:center;font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">
-    投入 {cur} {invest_amount:,} · 持有 {hold_choice} · 90% 落在 {p10_amt:+,.0f} ~ {p90_amt:+,.0f} {cur}
+    投入 {cur} {invest_amount:,} · 持有 {hold_days} 天 · 90% 落在 {p10_amt:+,.0f} ~ {p90_amt:+,.0f} {cur}
 </div>
 """, unsafe_allow_html=True)
 
@@ -1333,7 +1332,7 @@ with tab_trade:
                 <div style="display:flex;justify-content:space-between;padding:0.5rem 0;
                             border-bottom:1px solid #F0F1F3">
                     <span style="font-size:0.8rem;color:#6B7280">預計持有</span>
-                    <span style="font-size:0.8rem;font-weight:600">{hold_choice}</span>
+                    <span style="font-size:0.8rem;font-weight:600">{hold_days} 天</span>
                 </div>
                 <div style="font-size:0.72rem;color:#9CA3AF;margin-top:0.5rem">
                     到達目標或觸碰停損任一先到先出場</div>
@@ -1445,7 +1444,7 @@ with tab_trade:
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
         # ── 週度投資機會圖 ────────────────────────────────
-        st.markdown(f"<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有 {hold_choice} 的歷史勝率</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 這週買、持有 {hold_days} 天的歷史勝率</div>", unsafe_allow_html=True)
         try:
             import plotly.graph_objects as go_w
             _lh = get_long_history(active)
@@ -1512,7 +1511,7 @@ with tab_trade:
                 opacity=0.85,
                 yaxis="y",
                 customdata=_custom,
-                hovertemplate=f"%{{customdata}} 買進、持有{hold_choice}<br>歷史獲利機率 %{{y:.1f}}%<extra></extra>",
+                hovertemplate=f"%{{customdata}} 買進、持有{hold_days}天<br>歷史獲利機率 %{{y:.1f}}%<extra></extra>",
             ))
             _vol_unit  = 1000 if _by_wk["avg_vol"].max() > 5e6 else 1
             _vol_label = "千張" if _vol_unit == 1000 else "張"
