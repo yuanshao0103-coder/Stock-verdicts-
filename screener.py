@@ -817,12 +817,17 @@ def render_stock_screener():
     if st.button("清除所有條件", use_container_width=True, key="clear_screener"):
         watchlist = st.session_state.get("my_watchlist", [])
         active    = st.session_state.get("active", None)
+        # 把所有 toggle（c_xxxxxxxx）設回 False，其餘 key 刪除
         for k in list(st.session_state.keys()):
-            del st.session_state[k]
+            if k.startswith("c_"):
+                st.session_state[k] = False
+            elif k not in ("my_watchlist", "active", "screener_panel_open",
+                           "invest", "hold", "clear_screener"):
+                del st.session_state[k]
         st.session_state.my_watchlist = watchlist
         if active is not None:
             st.session_state.active = active
-        st.session_state.screener_panel_open = True   # 清除後確保選單重新展開
+        st.session_state.screener_panel_open = True
         st.rerun(scope="app")
 
     if run:
