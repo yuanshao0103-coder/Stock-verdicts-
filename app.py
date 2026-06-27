@@ -924,6 +924,82 @@ with tab_chart:
     except Exception as e:
         st.warning(f"圖表錯誤：{e}")
 
+    # ── K 線圖（深色）────────────────────────────────────────
+    st.markdown("<div style='font-size:0.8rem;font-weight:700;color:#9CA3AF;margin:1rem 0 0.4rem;letter-spacing:0.06em;text-transform:uppercase'>K 線走勢</div>", unsafe_allow_html=True)
+    try:
+        import plotly.graph_objects as _go
+        from plotly.subplots import make_subplots as _msp
+        _df = df.copy()
+        _ma5  = _df["Close"].rolling(5).mean()
+        _ma20 = _df["Close"].rolling(20).mean()
+        _ma60 = _df["Close"].rolling(60).mean()
+        _fig_k = _msp(rows=2,cols=1,row_heights=[0.72,0.28],
+                      shared_xaxes=True,vertical_spacing=0.03)
+        _fig_k.add_trace(_go.Candlestick(
+            x=_df.index,open=_df["Open"],high=_df["High"],low=_df["Low"],close=_df["Close"],
+            name="K棒",
+            increasing=dict(fillcolor="#00C853",line=dict(color="#00C853",width=0.8)),
+            decreasing=dict(fillcolor="#FF1744",line=dict(color="#FF1744",width=0.8))),
+            row=1,col=1)
+        _fig_k.add_trace(_go.Scatter(x=_df.index,y=_ma5, name="MA5",  line=dict(color="#F9A825",width=1.4)),row=1,col=1)
+        _fig_k.add_trace(_go.Scatter(x=_df.index,y=_ma20,name="MA20", line=dict(color="#00BCD4",width=1.4)),row=1,col=1)
+        _fig_k.add_trace(_go.Scatter(x=_df.index,y=_ma60,name="MA60", line=dict(color="#CE93D8",width=1.4)),row=1,col=1)
+        _vc2 = ["#00C853" if c>=o else "#FF1744" for c,o in zip(_df["Close"],_df["Open"])]
+        _fig_k.add_trace(_go.Bar(x=_df.index,y=_df["Volume"],name="量能",marker_color=_vc2,opacity=0.7),row=2,col=1)
+        _p0 = _df["Close"].iloc[0];  _pn = _df["Close"].iloc[-1]
+        _fig_k.add_annotation(x=_df.index[0], y=_p0,text=f"{_p0:,.0f}",
+            font=dict(color="#00C853",size=13,family="DM Mono"),showarrow=False,xanchor="left",yanchor="middle",row=1,col=1)
+        _fig_k.add_annotation(x=_df.index[-1],y=_pn,text=f"{_pn:,.0f}",
+            font=dict(color="#FF1744" if _pn<_p0 else "#00C853",size=13,family="DM Mono"),
+            showarrow=False,xanchor="right",yanchor="middle",row=1,col=1)
+        _fig_k.update_layout(
+            height=500,paper_bgcolor="#111",plot_bgcolor="#111",
+            font=dict(family="DM Sans",color="#888",size=11),
+            hovermode="x unified",
+            legend=dict(orientation="h",yanchor="bottom",y=1.01,bgcolor="rgba(0,0,0,0)",font=dict(color="#aaa")),
+            margin=dict(l=0,r=55,t=8,b=0),
+            xaxis=dict(showgrid=False,zeroline=False,color="#555",rangeslider_visible=False),
+            yaxis=dict(gridcolor="#222",zeroline=False,side="right",color="#888"),
+            xaxis2=dict(showgrid=False,zeroline=False,color="#555"),
+            yaxis2=dict(gridcolor="#222",zeroline=False,side="right",color="#888"))
+        st.plotly_chart(_fig_k,use_container_width=True)
+    except Exception as _e:
+        st.warning(f"K線圖錯誤：{_e}")
+
+    # ── 均線出場圖 ────────────────────────────────────────────
+    st.markdown("<div style='font-size:0.8rem;font-weight:700;color:#9CA3AF;margin:0.8rem 0 0.3rem;letter-spacing:0.06em;text-transform:uppercase'>均線出場訊號（碰線就跑）</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.72rem;color:#6B7280;margin-bottom:0.5rem'>不管賺賠，收盤價跌破 MA20 → 出場。綠色區塊 = 持倉安全，紅色區塊 = 已跌破均線應出場。</div>", unsafe_allow_html=True)
+    try:
+        _ma_exit = _df["Close"].rolling(20).mean()
+        _fig_exit = _go.Figure()
+        # 填色：收盤 > MA20 = 綠（安全），< MA20 = 紅（出場）
+        _above = _df["Close"].where(_df["Close"] >= _ma_exit)
+        _below = _df["Close"].where(_df["Close"] <  _ma_exit)
+        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_ma_exit,name="MA20 出場線",
+            line=dict(color="#F9A825",width=2),fill=None))
+        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_above,name="持倉（安全）",
+            line=dict(color="#00C853",width=0),
+            fill="tonexty",fillcolor="rgba(0,200,83,0.15)",showlegend=True))
+        _fig_exit.add_trace(_go.Scatter(x=_df.index,y=_df["Close"],name="收盤價",
+            line=dict(color="#E0E0E0",width=1.5),showlegend=True))
+        # 找出最近一次跌破 MA20 的訊號
+        _cross = (_df["Close"] < _ma_exit) & (_df["Close"].shift(1) >= _ma_exit.shift(1))
+        for _dt in _df.index[_cross][-5:]:
+            _fig_exit.add_vline(x=str(_dt),line_color="#FF1744",line_width=1,line_dash="dot",
+                annotation_text="出場",annotation_font_color="#FF1744",annotation_font_size=10,
+                annotation_position="top")
+        _fig_exit.update_layout(
+            height=320,paper_bgcolor="#111",plot_bgcolor="#111",
+            font=dict(family="DM Sans",color="#888",size=11),
+            hovermode="x unified",
+            legend=dict(orientation="h",yanchor="bottom",y=1.01,bgcolor="rgba(0,0,0,0)",font=dict(color="#aaa")),
+            margin=dict(l=0,r=55,t=8,b=0),
+            xaxis=dict(showgrid=False,zeroline=False,color="#555"),
+            yaxis=dict(gridcolor="#222",zeroline=False,side="right",color="#888"))
+        st.plotly_chart(_fig_exit,use_container_width=True)
+    except Exception as _e:
+        st.warning(f"出場圖錯誤：{_e}")
+
 with tab_news:
     col_n, col_f = st.columns([3, 2])
 
