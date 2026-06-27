@@ -593,7 +593,11 @@ def get_quick_risk_status(ticker: str) -> dict:
 
 if "active" not in st.session_state: st.session_state.active = ""
 if "invest" not in st.session_state: st.session_state.invest = 10000
-if "hold"   not in st.session_state: st.session_state.hold   = 63
+if "hold" not in st.session_state:
+    st.session_state.hold = 63
+elif isinstance(st.session_state.hold, str):
+    _old = {"1 個月":21,"3 個月":63,"6 個月":126,"1 年":252}
+    st.session_state.hold = _old.get(st.session_state.hold, 63)
 
 # 卡片連結導航：?active=TICKER → session_state
 _qp_active = st.query_params.get("active", "")
