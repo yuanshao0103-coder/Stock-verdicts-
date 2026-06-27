@@ -29,15 +29,26 @@ _CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 _CACHE_MAX_AGE_HOURS = 8  # 快取超過此時數自動視為過期
 
 def _load_cache(filename: str):
-    """讀取本地快取；不存在或超過 _CACHE_MAX_AGE_HOURS 小時回傳 None。"""
+    """讀取本地快取；不存在或超過 _CACHE_MAX_AGE_HOURS 小時（以 last_update.txt 內容計算）回傳 None。"""
     path = os.path.join(_CACHE_DIR, filename)
-    if os.path.exists(path):
-        age_hours = (datetime.now().timestamp() - os.path.getmtime(path)) / 3600
+    if not os.path.exists(path):
+        return None
+    # 用 last_update.txt 的「資料收集時間」判斷是否過期，不用檔案 mtime
+    ts_path = os.path.join(_CACHE_DIR, "last_update.txt")
+    try:
+        if os.path.exists(ts_path):
+            with open(ts_path, "r", encoding="utf-8") as f:
+                ts_str = f.read().strip()
+            data_time = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+            age_hours = (datetime.now() - data_time).total_seconds() / 3600
+        else:
+            age_hours = (datetime.now().timestamp() - os.path.getmtime(path)) / 3600
         if age_hours > _CACHE_MAX_AGE_HOURS:
             return None
-        with open(path, "rb") as f:
-            return pickle.load(f)
-    return None
+    except Exception:
+        pass  # 解析失敗就直接用快取
+    with open(path, "rb") as f:
+        return pickle.load(f)
 
 
 def _save_cache(obj, filename: str):
