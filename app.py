@@ -1148,7 +1148,7 @@ with tab_trade:
             verdict_label = "🔥 投爆"
             verdict_color = "#00A86B"
             verdict_bg    = "rgba(0,168,107,0.06)"
-        elif score >= 1:
+        elif score >= -1:
             verdict_label = "🤔 先緩緩"
             verdict_color = "#F59E0B"
             verdict_bg    = "rgba(245,158,11,0.06)"
