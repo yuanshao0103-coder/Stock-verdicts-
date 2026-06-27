@@ -920,6 +920,7 @@ with tab_news:
     col_n, col_f = st.columns([3, 2])
 
     with col_n:
+        st.markdown("<div style='font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.35rem'>近期新聞</div>", unsafe_allow_html=True)
         with st.spinner("抓取新聞…"):
             nl = get_news(active)
 
@@ -933,7 +934,7 @@ with tab_news:
             sub_list, sub_feat = st.columns([4, 6])
 
             with sub_list:
-                _list_html = "<div style='font-size:0.60rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:0.35rem'>近期新聞</div>"
+                _list_html = ""
                 for _i, _n in enumerate(nl):
                     _is_sel  = (_i == _ns_idx)
                     _short   = _n["title"][:34] + "…" if len(_n["title"]) > 34 else _n["title"]
