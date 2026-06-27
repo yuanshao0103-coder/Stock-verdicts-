@@ -1138,63 +1138,80 @@ with tab_trade:
         vol_ratio = float(vol_t.tail(5).mean() / vol_t.tail(60).mean()) if len(vol_t) >= 60 else 1.0
 
         # ── 綜合時機評分（沅劭模型）──────────────────────
+        # status: "good" / "warn" / "bad"
         score = 0
-        reasons = []
+        reasons = []   # list of {"label","status","value","desc"}
 
-        # RSI
+        # RSI → 市場溫度
         if cur_rsi < 35:
             score += 3
-            reasons.append(f"📉 RSI 只剩 {cur_rsi:.0f}，超賣爆了，市場把它踩到地板，反彈機率超高")
+            reasons.append({"label":"市場溫度","status":"good",
+                "value":f"超冷 ({cur_rsi:.0f})","desc":"已被踩到地板，反彈機率高"})
         elif cur_rsi < 50:
             score += 1
-            reasons.append(f"📊 RSI {cur_rsi:.0f}，溫度剛好，還沒過熱，還有上漲空間")
+            reasons.append({"label":"市場溫度","status":"good",
+                "value":f"剛好 ({cur_rsi:.0f})","desc":"不冷不熱，還有上漲空間"})
         elif cur_rsi < 65:
-            reasons.append(f"📊 RSI {cur_rsi:.0f}，正常區間，不算熱也不算冷")
+            reasons.append({"label":"市場溫度","status":"warn",
+                "value":f"偏暖 ({cur_rsi:.0f})","desc":"正常範圍，但已開始偏熱"})
         else:
             score -= 2
-            reasons.append(f"🔥 RSI 衝到 {cur_rsi:.0f}！過熱了，散戶都追進去了你現在才要買？")
+            reasons.append({"label":"市場溫度","status":"bad",
+                "value":f"過熱 ({cur_rsi:.0f})","desc":"散戶都追進去了，現在買風險高"})
 
-        # 年線
+        # 年線 → 大趨勢
         if above_ma:
             score += 1
-            reasons.append(f"📈 站穩 200 日均線（年線），多頭格局還在，長期趨勢向上")
+            reasons.append({"label":"大趨勢","status":"good",
+                "value":"向上","desc":"股價站在年線之上，長期走勢健康"})
         else:
             score -= 1
-            reasons.append(f"📉 跌破 200 日均線（年線），趨勢已爛，現在抄底要先問清楚底在哪")
+            reasons.append({"label":"大趨勢","status":"bad",
+                "value":"向下","desc":"股價跌破年線，目前處於空頭格局"})
 
-        # 52W 位置
+        # 52W 位置 → 現在貴不貴
         if price_pct_in_range < 25:
             score += 2
-            reasons.append(f"💰 股價在年內低位 {price_pct_in_range:.0f}%，相對便宜，長線佈局的好時機")
+            reasons.append({"label":"現在貴不貴","status":"good",
+                "value":f"便宜 (低 {price_pct_in_range:.0f}%)","desc":"接近年內低點，相對划算"})
         elif price_pct_in_range > 80:
             score -= 1
-            reasons.append(f"⚠️ 股價在年內高位 {price_pct_in_range:.0f}%，現在追進去是在接刀，小心")
+            reasons.append({"label":"現在貴不貴","status":"bad",
+                "value":f"偏貴 (高 {price_pct_in_range:.0f}%)","desc":"接近年度高點，追高要小心"})
         else:
-            reasons.append(f"📍 股價在年內中段 {price_pct_in_range:.0f}%，不算貴也不算便宜，可觀察")
+            reasons.append({"label":"現在貴不貴","status":"warn",
+                "value":f"適中 ({price_pct_in_range:.0f}%)","desc":"不算貴也不算便宜，可觀察"})
 
-        # Monte Carlo 模擬
+        # Monte Carlo → 電腦模擬
         win_r = mc["win"]
         if win_r >= 72:
             score += 2
-            reasons.append(f"🎯 電腦模擬 8,000 條路徑，{win_r:.0f}% 都在漲，勝算大到笑出來")
+            reasons.append({"label":"電腦模擬","status":"good",
+                "value":f"看漲 {win_r:.0f}%","desc":f"模擬 8,000 次，{win_r:.0f}% 情境都是上漲"})
         elif win_r >= 60:
             score += 1
-            reasons.append(f"🎲 模擬勝率 {win_r:.0f}%，偏多，但還不到必勝的程度")
+            reasons.append({"label":"電腦模擬","status":"good",
+                "value":f"偏多 {win_r:.0f}%","desc":"偏向上漲，但還不到穩贏的程度"})
         elif win_r < 45:
             score -= 2
-            reasons.append(f"💸 模擬跑出來 {win_r:.0f}% 都在跌，贏少輸多，這個時間點不好")
+            reasons.append({"label":"電腦模擬","status":"bad",
+                "value":f"偏空 {win_r:.0f}%","desc":"多數情境都在跌，這時機點不好"})
         else:
-            reasons.append(f"⚖️ 模擬勝率 {win_r:.0f}%，五五波，丟硬幣決定也差不多")
+            reasons.append({"label":"電腦模擬","status":"warn",
+                "value":f"五五波 {win_r:.0f}%","desc":"漲跌機率差不多，方向不明"})
 
-        # 成交量
+        # 成交量 → 買賣熱度
         if vol_ratio >= 2.0:
             score -= 1
-            reasons.append(f"📦 最近成交量暴增到平時的 {vol_ratio:.1f} 倍，主力可能在倒貨給散戶，注意")
+            reasons.append({"label":"買賣熱度","status":"bad",
+                "value":f"爆量 {vol_ratio:.1f}x","desc":"成交量暴增，主力可能正在出貨"})
         elif vol_ratio < 0.6:
             score += 1
-            reasons.append(f"🤫 成交量縮到只剩 {vol_ratio:.1f} 倍，市場在醞釀，大波動快來了")
+            reasons.append({"label":"買賣熱度","status":"warn",
+                "value":f"縮量 {vol_ratio:.1f}x","desc":"成交量萎縮，市場在醞釀，大波動快來了"})
         else:
-            reasons.append(f"〰️ 成交量正常（{vol_ratio:.1f} 倍），籌碼穩定，沒有異常跡象")
+            reasons.append({"label":"買賣熱度","status":"good",
+                "value":f"正常 {vol_ratio:.1f}x","desc":"買賣均衡，籌碼穩定"})
 
         # ── 最終判決 ─────────────────────────────────────
         if score >= 4:
@@ -1210,20 +1227,34 @@ with tab_trade:
             verdict_color = "#E53935"
             verdict_bg    = "rgba(229,57,53,0.06)"
 
-        _reasons_html = "".join(
-            f'<div style="font-size:0.79rem;color:#374151;padding:0.22rem 0;'
-            f'border-bottom:1px solid rgba(0,0,0,0.04);line-height:1.5">{r}</div>'
-            for r in reasons
-        )
+        _status_cfg = {
+            "good": {"bg":"#F0FDF4","border":"#86EFAC","dot":"#22C55E","txt":"#166534"},
+            "warn": {"bg":"#FFFBEB","border":"#FDE68A","dot":"#F59E0B","txt":"#92400E"},
+            "bad":  {"bg":"#FFF1F2","border":"#FECDD3","dot":"#EF4444","txt":"#9F1239"},
+        }
+        _rows_html = ""
+        for _r in reasons:
+            _cfg = _status_cfg[_r["status"]]
+            _rows_html += (
+                f'<div style="display:flex;align-items:flex-start;gap:0.6rem;'
+                f'padding:0.55rem 0.7rem;margin-bottom:0.4rem;'
+                f'background:{_cfg["bg"]};border:1px solid {_cfg["border"]};border-radius:8px">'
+                f'<div style="width:8px;height:8px;border-radius:50%;background:{_cfg["dot"]};'
+                f'margin-top:0.3rem;flex-shrink:0"></div>'
+                f'<div>'
+                f'<div style="display:flex;align-items:center;gap:0.5rem">'
+                f'<span style="font-size:0.72rem;font-weight:700;color:#374151">{_r["label"]}</span>'
+                f'<span style="font-size:0.72rem;font-weight:600;color:{_cfg["txt"]}">{_r["value"]}</span>'
+                f'</div>'
+                f'<div style="font-size:0.71rem;color:#6B7280;margin-top:0.1rem">{_r["desc"]}</div>'
+                f'</div></div>'
+            )
         st.markdown(f"""
         <div style="background:{verdict_bg};border-left:4px solid {verdict_color};
                     border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem">
             <div style="font-size:1.5rem;font-weight:800;color:{verdict_color};
-                        letter-spacing:-0.02em;margin-bottom:0.55rem">{verdict_label}</div>
-            <div style="font-size:0.62rem;color:#9CA3AF;font-weight:700;
-                        letter-spacing:0.07em;text-transform:uppercase;
-                        margin-bottom:0.4rem">沅劭模型判斷依據</div>
-            {_reasons_html}
+                        letter-spacing:-0.02em;margin-bottom:0.7rem">{verdict_label}</div>
+            {_rows_html}
         </div>
         """, unsafe_allow_html=True)
 
