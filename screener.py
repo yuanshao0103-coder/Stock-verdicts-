@@ -790,6 +790,9 @@ def _inject_screener_css():
         margin: 0 !important;
         line-height: 1.2 !important;
     }
+    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) div[data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -1095,7 +1098,6 @@ def _render_watchlist():
                 st.session_state.active = ticker
                 st.rerun(scope="app")
         with col_remove:
-            if st.button("✕", key=f"remove_{ticker}_{i}", use_container_width=True,
-                         help="從自選清單移除"):
+            if st.button("移除", key=f"remove_{ticker}_{i}", use_container_width=True):
                 st.session_state.my_watchlist = [s for s in wl if s["ticker"] != ticker]
                 st.rerun()
