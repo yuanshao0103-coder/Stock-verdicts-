@@ -688,23 +688,34 @@ if not st.session_state.active:
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     safe_id = q['ticker'].replace('.','_').replace('-','_')
+                    # Card visual + CSS marker so the next element (button) overlays it
                     st.markdown(f"""
-<div id="card_{safe_id}" style="cursor:pointer;background:#fff;border:2px solid {bdr};
-  border-radius:14px;padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem;
+<style>
+[data-testid="element-container"]:has(.nm-{safe_id}) + [data-testid="element-container"] {{
+    opacity:0 !important;
+    margin-top:-122px !important;
+    position:relative !important;
+    z-index:10 !important;
+}}
+[data-testid="element-container"]:has(.nm-{safe_id}) + [data-testid="element-container"] button {{
+    min-height:115px !important;
+    width:100% !important;
+    cursor:pointer !important;
+}}
+</style>
+<span class="nm-{safe_id}" style="display:none"></span>
+<div style="cursor:pointer;background:#fff;border:2px solid {bdr};border-radius:14px;
+  padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem;
   transition:box-shadow .15s,transform .12s">
   <div style="font-size:.67rem;font-weight:600;color:{risk['color']};margin-bottom:.28rem">{risk['emoji']} {risk['label']}</div>
   <div style="font-size:.86rem;font-weight:700;color:#111;margin-bottom:.12rem">{ticker_disp}&nbsp;<span style="font-weight:400;color:#6B7280;font-size:.78rem">{cn}</span></div>
   <div style="font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;color:#111;margin-bottom:.06rem">{cur} {q['price']:,.1f}</div>
   <div style="font-size:.83rem;font-weight:600;color:{chg_color}">{arrow} {abs(chg):.2f}%</div>
-</div>
-<script>
-(function(){{
-  var el=document.getElementById('card_{safe_id}');
-  if(el)el.addEventListener('click',function(){{
-    window.location.href='?active={q['ticker']}';
-  }});
-}})();
-</script>""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
+                    # Invisible nav button overlaid on card via CSS above
+                    if st.button(" ", key=f"nav_{safe_id}", use_container_width=True):
+                        st.session_state.active = q['ticker']
+                        st.rerun()
 
     with tab_tw:
         render_grid(TW_TICKERS)
