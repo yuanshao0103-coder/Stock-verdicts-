@@ -933,7 +933,7 @@ with tab_news:
                     _fw      = "600" if _is_sel else "400"
                     _tc      = "#1D4ED8" if _is_sel else "#374151"
                     _list_html += f"""
-                    <a href="?ns={_i}" style="text-decoration:none;display:block">
+                    <a href="?active={active}&ns={_i}" style="text-decoration:none;display:block">
                       <div style="padding:0.35rem 0.4rem 0.35rem 0.5rem;background:{_bg};
                                   border-bottom:1px solid #EAECEF;border-left:{_bl}">
                         <div style="font-size:0.71rem;font-weight:{_fw};color:{_tc};
