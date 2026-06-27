@@ -772,12 +772,19 @@ def _inject_screener_css():
         border-radius: 8px !important;
     }
     div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .stButton > button {
-        height: 1.75rem !important;
-        min-height: unset !important;
-        padding: 0 0.4rem !important;
-        font-size: 0.73rem !important;
-        line-height: 1 !important;
+        height: 2rem !important;
+        min-height: 2rem !important;
+        padding: 0 0.5rem !important;
+        font-size: 0.78rem !important;
+        line-height: 2rem !important;
         border-radius: 6px !important;
+        color: #374151 !important;
+        background: #F3F4F6 !important;
+        border: 1px solid #D1D5DB !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(.sc-row-marker) .stButton > button:hover {
+        background: #E5E7EB !important;
+        border-color: #9CA3AF !important;
     }
     div[data-testid="stVerticalBlock"]:has(.sc-row-marker) [data-testid="stMarkdownContainer"] p {
         margin: 0 !important;
