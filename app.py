@@ -733,12 +733,14 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
                                 index=_cur_idx, horizontal=True, label_visibility="collapsed")
         st.session_state.invest_cur = _cur_options[_cur_choice]
     with p2:
-        hold_days_input = st.number_input(
-            "預計持有天數（交易日）", min_value=5, max_value=504,
-            value=int(st.session_state.hold), step=5)
-        st.session_state.hold = int(hold_days_input)
-        _hd = int(hold_days_input)
-        _natural = round(_hd / 21 * 30)  # 交易日換算自然日
+        # session_state.hold 舊版存交易日，遷移成自然日
+        _stored = int(st.session_state.hold)
+        _stored_nat = _stored if _stored > 60 else round(_stored / 21 * 30)
+        hold_nat_input = st.number_input(
+            "預計持有天數（自然日）", min_value=7, max_value=730,
+            value=_stored_nat, step=7)
+        st.session_state.hold = int(hold_nat_input)
+        _natural = int(hold_nat_input)
         if _natural < 14:
             _hold_label = f"約 {_natural} 天"
         elif _natural < 60:
@@ -747,8 +749,10 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
             _hold_label = f"約 {round(_natural/30)} 個月"
         else:
             _hold_label = f"約 {_natural/365:.1f} 年"
-        st.caption(f"實際時間：{_hold_label}（{_hd} 個交易日 ≈ {_natural} 個自然日）")
-hold_days     = int(st.session_state.hold)
+        _trading = round(_natural * 21 / 30)
+        st.caption(f"{_hold_label}（≈ {_trading} 個交易日）")
+# hold_days 全程用交易日給 MC 計算
+hold_days     = round(int(st.session_state.hold) * 21 / 30)
 invest_amount = st.session_state.invest
 invest_cur    = st.session_state.get("invest_cur", "TWD")  # 用戶選的幣別
 
