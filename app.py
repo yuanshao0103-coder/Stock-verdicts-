@@ -717,9 +717,12 @@ with st.expander("⚙️ 投資參數設定", expanded=False):
     p1, p2 = st.columns(2)
     with p1:
         _active_now = st.session_state.get("active", "")
-        _invest_cur = "新台幣（TWD）" if (_active_now.endswith(".TW") or _active_now.endswith(".TWO")) else "美元（USD）"
-        invest_amount = st.number_input(f"投入金額（{_invest_cur}）", min_value=100, max_value=10_000_000,
-                                         value=st.session_state.invest, step=1000, format="%d")
+        _is_tw = _active_now.endswith(".TW") or _active_now.endswith(".TWO")
+        _invest_cur_label = "新台幣（TWD）" if _is_tw else "美元（USD）"
+        invest_amount = st.number_input("投入金額", min_value=100, max_value=10_000_000,
+                                         value=st.session_state.invest, step=1000, format="%d",
+                                         help=f"目前幣別：{_invest_cur_label}")
+        st.caption(f"幣別：{_invest_cur_label}")
         st.session_state.invest = invest_amount
     with p2:
         hold_days_input = st.number_input(
