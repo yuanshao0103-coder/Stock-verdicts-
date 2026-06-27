@@ -672,6 +672,35 @@ if not st.session_state.active:
     _ROW_BORDERS = ["#93C5FD", "#F9A8D4", "#FCD34D", "#86EFAC", "#C4B5FD"]
 
     def render_grid(tickers):
+        # JS: find all empty-label buttons inside card columns and move them over the card above
+        st.markdown("""<script>
+setTimeout(function(){
+  try{
+    var doc=window.parent.document;
+    var vcols=doc.querySelectorAll(
+      '[data-testid="stHorizontalBlock"] [data-testid="stVerticalBlock"]');
+    vcols.forEach(function(vc){
+      var md=vc.querySelector('.stMarkdown');
+      var bc=vc.querySelector('.stButton');
+      if(!md||!bc)return;
+      var btn=bc.querySelector('button');
+      if(!btn||btn.innerText.trim()!=='')return;
+      btn.style.setProperty('background','transparent','important');
+      btn.style.setProperty('border','none','important');
+      btn.style.setProperty('box-shadow','none','important');
+      btn.style.setProperty('height','120px','important');
+      btn.style.setProperty('width','100%','important');
+      btn.style.setProperty('cursor','pointer','important');
+      var ec=bc.closest('[data-testid="element-container"]');
+      if(ec){
+        ec.style.setProperty('margin-top','-125px','important');
+        ec.style.setProperty('position','relative','important');
+        ec.style.setProperty('z-index','10','important');
+      }
+    });
+  }catch(e){}
+},700);
+</script>""", unsafe_allow_html=True)
         with st.spinner("載入行情…"):
             stocks = load_stocks(tickers)
         rows = [stocks[i:i+2] for i in range(0, len(stocks), 2)]
@@ -688,22 +717,7 @@ if not st.session_state.active:
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
                     safe_id = q['ticker'].replace('.','_').replace('-','_')
-                    # Card visual + CSS marker so the next element (button) overlays it
                     st.markdown(f"""
-<style>
-[data-testid="element-container"]:has(.nm-{safe_id}) + [data-testid="element-container"] {{
-    opacity:0 !important;
-    margin-top:-122px !important;
-    position:relative !important;
-    z-index:10 !important;
-}}
-[data-testid="element-container"]:has(.nm-{safe_id}) + [data-testid="element-container"] button {{
-    min-height:115px !important;
-    width:100% !important;
-    cursor:pointer !important;
-}}
-</style>
-<span class="nm-{safe_id}" style="display:none"></span>
 <div style="cursor:pointer;background:#fff;border:2px solid {bdr};border-radius:14px;
   padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem;
   transition:box-shadow .15s,transform .12s">
@@ -712,7 +726,6 @@ if not st.session_state.active:
   <div style="font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;color:#111;margin-bottom:.06rem">{cur} {q['price']:,.1f}</div>
   <div style="font-size:.83rem;font-weight:600;color:{chg_color}">{arrow} {abs(chg):.2f}%</div>
 </div>""", unsafe_allow_html=True)
-                    # Invisible nav button overlaid on card via CSS above
                     if st.button(" ", key=f"nav_{safe_id}", use_container_width=True):
                         st.session_state.active = q['ticker']
                         st.rerun()
