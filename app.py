@@ -687,28 +687,24 @@ if not st.session_state.active:
                 ticker_disp = q["ticker"].replace(".TW", "")
                 chg_color = "#00A86B" if chg >= 0 else "#E53935"
                 with col:
-                    _components.html(f"""<!DOCTYPE html><html><head>
-<style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-html,body{{height:100%;background:transparent;overflow:hidden}}
-.card{{background:#fff;border:2px solid {bdr};border-radius:14px;
-       padding:0.85rem 1rem;height:110px;cursor:pointer;
-       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-       transition:box-shadow .15s,transform .12s;display:flex;flex-direction:column}}
-.card:hover{{box-shadow:0 4px 16px rgba(0,0,0,.12);transform:translateY(-1px)}}
-.r{{font-size:.67rem;font-weight:600;color:{risk['color']};margin-bottom:.28rem}}
-.n{{font-size:.86rem;font-weight:700;color:#111;margin-bottom:.12rem}}
-.s{{font-weight:400;color:#6B7280;font-size:.78rem}}
-.p{{font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;color:#111;margin-bottom:.06rem}}
-.c{{font-size:.83rem;font-weight:600;color:{chg_color}}}
-</style></head><body>
-<div class="card" onclick="window.parent.location.href='?active={q['ticker']}'">
-  <div class="r">{risk['emoji']} {risk['label']}</div>
-  <div class="n">{ticker_disp}&nbsp;<span class="s">{cn}</span></div>
-  <div class="p">{cur} {q['price']:,.1f}</div>
-  <div class="c">{arrow} {abs(chg):.2f}%</div>
+                    safe_id = q['ticker'].replace('.','_').replace('-','_')
+                    st.markdown(f"""
+<div id="card_{safe_id}" style="cursor:pointer;background:#fff;border:2px solid {bdr};
+  border-radius:14px;padding:0.85rem 1rem;min-height:108px;margin-bottom:0.3rem;
+  transition:box-shadow .15s,transform .12s">
+  <div style="font-size:.67rem;font-weight:600;color:{risk['color']};margin-bottom:.28rem">{risk['emoji']} {risk['label']}</div>
+  <div style="font-size:.86rem;font-weight:700;color:#111;margin-bottom:.12rem">{ticker_disp}&nbsp;<span style="font-weight:400;color:#6B7280;font-size:.78rem">{cn}</span></div>
+  <div style="font-family:'DM Mono',monospace;font-size:1.02rem;font-weight:700;color:#111;margin-bottom:.06rem">{cur} {q['price']:,.1f}</div>
+  <div style="font-size:.83rem;font-weight:600;color:{chg_color}">{arrow} {abs(chg):.2f}%</div>
 </div>
-</body></html>""", height=118, scrolling=False)
+<script>
+(function(){{
+  var el=document.getElementById('card_{safe_id}');
+  if(el)el.addEventListener('click',function(){{
+    window.location.href='?active={q['ticker']}';
+  }});
+}})();
+</script>""", unsafe_allow_html=True)
 
     with tab_tw:
         render_grid(TW_TICKERS)
