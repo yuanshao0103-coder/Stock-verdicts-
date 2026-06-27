@@ -578,17 +578,16 @@ def _check_revenue(label: str, rev_df, info_fallback: dict = None) -> bool:
     if rev_df is None or (hasattr(rev_df, "empty") and rev_df.empty):
         if info_fallback:
             rg = _sg(info_fallback, "revenueGrowth")  # YoY revenue growth (annual)
-            if rg is None:
-                return True  # 無法驗證，不過濾
-            if label == "月營收成長":
-                return rg > 0
-            if label == "近 1 個月，營收年增率大於 10%":
-                return rg * 100 > 10
-            if label in ("月營收年增率連續 3 月成長", "月營收創近 6 月新高"):
-                return rg > 0
-            if label in ("月營收 3MA 穿越 12MA", "短期營收年增率大於長期營收年增率 10% 以上"):
-                return rg * 100 > 10
-        return True  # 資料完全不可用時，不過濾（避免 0 結果）
+            if rg is not None:
+                if label == "月營收成長":
+                    return rg > 0
+                if label == "近 1 個月，營收年增率大於 10%":
+                    return rg * 100 > 10
+                if label in ("月營收年增率連續 3 月成長", "月營收創近 6 月新高"):
+                    return rg > 0
+                if label in ("月營收 3MA 穿越 12MA", "短期營收年增率大於長期營收年增率 10% 以上"):
+                    return rg * 100 > 10
+        return False  # 資料不可用，不通過（結果準確優先）
     df = rev_df
     rev_col = next((c for c in ["revenue", "Revenue"] if c in df.columns), None)
     if rev_col is None:
