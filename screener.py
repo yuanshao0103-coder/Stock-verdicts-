@@ -26,7 +26,7 @@ except ImportError:
 _CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 
 
-_CACHE_MAX_AGE_HOURS = 8  # 快取超過此時數自動視為過期
+_CACHE_MAX_AGE_HOURS = 4  # 快取超過此時數自動視為過期
 
 def _load_cache(filename: str):
     """讀取本地快取；不存在或超過 _CACHE_MAX_AGE_HOURS 小時（以 last_update.txt 內容計算）回傳 None。"""
@@ -906,12 +906,24 @@ def _render_results(selected_keys: list):
         real_labels_used    = st.session_state.get("last_screen_real_labels", [])
         mock_labels_pending = st.session_state.get("last_screen_mock_labels", [])
 
-    # 快取時間提示
+    # 快取時間提示 + 手動更新按鈕
     ts = get_cache_timestamp()
-    if ts != "尚無快取":
-        st.caption(f"📦 資料快取：{ts}　執行 `python update_cache.py` 可更新")
-    else:
-        st.caption("⚠️ 尚無本地快取，正在即時打 API（較慢）。執行 `python update_cache.py` 可建立快取")
+    _col_ts, _col_btn = st.columns([6, 1])
+    with _col_ts:
+        if ts != "尚無快取":
+            st.caption(f"📦 資料快取：{ts}")
+        else:
+            st.caption("⚠️ 尚無快取，首次篩選時會自動下載（較慢）")
+    with _col_btn:
+        if st.button("🔄 更新", key="refresh_cache", help="清除快取，下次篩選時抓最新資料"):
+            import glob as _glob
+            for _f in _glob.glob(os.path.join(_CACHE_DIR, "*.pkl")):
+                try: os.remove(_f)
+                except Exception: pass
+            ts_p = os.path.join(_CACHE_DIR, "last_update.txt")
+            if os.path.exists(ts_p): os.remove(ts_p)
+            st.success("快取已清除，請重新執行篩選")
+            st.rerun()
 
     # 條件來源標籤
     if real_labels_used:
