@@ -861,6 +861,16 @@ st.markdown('<hr class="divider">', unsafe_allow_html=True)
 # Tabs
 tab_chart, tab_news, tab_trade = st.tabs(["📈  走勢與預測", "📰  新聞與財報", "💰  真的要投？好啦"])
 
+# 點新聞連結後自動切回新聞分頁
+_tab_param = st.query_params.get("tab", "")
+if _tab_param == "news":
+    st.markdown("""<script>
+    setTimeout(function(){
+        var tabs=window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+        if(tabs&&tabs.length>1){tabs[1].click();}
+    },300);
+    </script>""", unsafe_allow_html=True)
+
 with tab_chart:
     try:
         import plotly.graph_objects as go
@@ -933,7 +943,7 @@ with tab_news:
                     _fw      = "600" if _is_sel else "400"
                     _tc      = "#1D4ED8" if _is_sel else "#374151"
                     _list_html += f"""
-                    <a href="?active={active}&ns={_i}" style="text-decoration:none;display:block">
+                    <a href="?active={active}&ns={_i}&tab=news" style="text-decoration:none;display:block">
                       <div style="padding:0.35rem 0.4rem 0.35rem 0.5rem;background:{_bg};
                                   border-bottom:1px solid #EAECEF;border-left:{_bl}">
                         <div style="font-size:0.71rem;font-weight:{_fw};color:{_tc};
