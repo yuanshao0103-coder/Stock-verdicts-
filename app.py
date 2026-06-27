@@ -65,6 +65,64 @@ FUNNY_DESCS = {
     "2886.TW": "老字號公股銀行，背後有政府撐腰，穩健但成長慢。配息穩定，是保守型投資人的最愛——不求爆發但求長久，適合那種你爸爸幫你買、然後忘記的股票。",
 }
 
+# ── 外部高風險警示清單 ────────────────────────────────────────
+# 已知受政治/名人/主力操控影響特別大的股票
+_EXTERNAL_RISKS = {
+    # 馬斯克效應
+    "TSLA":    [("🧑‍🚀 馬斯克效應",   "Musk 一條推文可以讓股價單日暴漲或暴跌 10%+，方向完全無法預測。追高前請確認最近他有沒有發瘋。")],
+    # 川普關稅 / 地緣政治敏感
+    "2330.TW": [("🌏 地緣政治風險",  "台積電是美中科技戰的最前線。川普關稅、台海緊張局勢、美國要求設廠等任何一個政治變數都可能讓股價大幅震盪。")],
+    "2454.TW": [("🌏 地緣政治風險",  "聯發科高度依賴中國市場，美國出口管制若擴大，營收直接受衝擊。")],
+    "TSM":     [("🌏 地緣政治風險",  "同 2330.TW，台積電 ADR。美中科技戰最敏感的標的之一。")],
+    "NVDA":    [("🌏 出口管制風險",  "美國持續收緊 AI 晶片出口限制，NVDA 對中國的 H 系列 GPU 銷售隨時可能被封殺，業績高度不確定。"),
+                ("🤖 AI 泡沫風險",   "AI 題材帶動估值大幅拉伸，若 AI 投資熱潮降溫，股價可能快速修正。")],
+    "AMD":     [("🌏 出口管制風險",  "同樣受美國 AI 晶片出口管制影響，中國業務存在高度不確定性。")],
+    "AVGO":    [("🌏 出口管制風險",  "部分網路晶片產品涉及出口管制審查，中國業務風險上升。")],
+    "INTC":    [("🏭 轉型風險",      "晶圓代工轉型燒錢巨大，若 18A 製程無法如期量產，整個故事就垮了。政府補貼能否到位也是問號。")],
+    "2317.TW": [("🌏 關稅風險",      "鴻海大量組裝廠在中國，川普對中國加徵關稅直接壓縮代工毛利。")],
+    "2308.TW": [("🌏 關稅風險",      "台達電產品銷往全球，關稅戰波及供應鏈成本，壓縮獲利空間。")],
+    "2382.TW": [("🌏 關稅風險",      "廣達 AI 伺服器高度依賴出口，關稅政策變動直接影響訂單。")],
+    "4938.TW": [("🌏 關稅風險",      "和碩組裝廠高度集中在中國，關稅成本轉嫁困難。")],
+}
+
+def check_pump_risk(df: "pd.DataFrame") -> list:
+    """動態偵測短期暴漲 / 爆量 / 極端過熱訊號，回傳 (title, desc) 清單。"""
+    warnings = []
+    try:
+        close = df["Close"].dropna()
+        vol   = df["Volume"].dropna()
+
+        # 1. 30 個交易日暴漲
+        if len(close) >= 30:
+            gain_30 = (close.iloc[-1] / close.iloc[-30] - 1) * 100
+            if gain_30 > 50:
+                warnings.append(("🚨 短期暴漲警戒",
+                    f"過去 30 個交易日股價上漲 {gain_30:.0f}%！這種漲幅通常是主力拉盤或消息炒作，"
+                    "散戶現在追進去很可能成為最後一棒。"))
+            elif gain_30 > 30:
+                warnings.append(("⚠️ 短期強勢注意",
+                    f"過去 30 個交易日股價上漲 {gain_30:.0f}%，已進入追高區間，建議等回調再進場。"))
+
+        # 2. 成交量異常暴增（近 5 日 vs 近 60 日平均）
+        if len(vol) >= 60:
+            vr = float(vol.tail(5).mean() / vol.tail(60).mean())
+            if vr > 4:
+                warnings.append(("🚨 爆量異常",
+                    f"最近 5 天成交量是平時的 {vr:.1f} 倍！短時間爆量通常代表主力正在大規模進出，"
+                    "散戶跟進後很可能面對急速反轉。"))
+
+        # 3. 股價遠高於 MA20（短線過度拉升）
+        if len(close) >= 20:
+            ma20 = close.rolling(20).mean().iloc[-1]
+            deviation = (close.iloc[-1] / ma20 - 1) * 100
+            if deviation > 20:
+                warnings.append(("⚠️ 股價遠離均線",
+                    f"目前股價比 20 日均線高出 {deviation:.0f}%，短線嚴重偏離，"
+                    "回調壓力大，不建議在此位置追高。"))
+    except Exception:
+        pass
+    return warnings
+
 def get_funny_desc(ticker, original):
     t = ticker.upper()
     if t in FUNNY_DESCS:
@@ -1131,6 +1189,32 @@ with tab_news:
 
 with tab_trade:
     try:
+        # ── 外部風險警示 ──────────────────────────────────
+        _ext_warnings = list(_EXTERNAL_RISKS.get(active, []))
+        _pump_warnings = check_pump_risk(df)
+        _all_warnings = _ext_warnings + [("🚨 " + t if not t.startswith("🚨") and not t.startswith("⚠️") else t, d) for t, d in _pump_warnings]
+
+        # 重新整理：pump warnings 已帶 emoji，不需再加
+        _all_warnings = list(_EXTERNAL_RISKS.get(active, [])) + check_pump_risk(df)
+
+        if _all_warnings:
+            _warn_rows = "".join(
+                f'<div style="display:flex;gap:0.6rem;padding:0.55rem 0;'
+                f'border-bottom:1px solid rgba(220,38,38,0.12);align-items:flex-start">'
+                f'<div style="font-size:0.78rem;font-weight:700;color:#B91C1C;'
+                f'white-space:nowrap;padding-top:0.05rem">{t}</div>'
+                f'<div style="font-size:0.76rem;color:#374151;line-height:1.55">{d}</div>'
+                f'</div>'
+                for t, d in _all_warnings
+            )
+            st.markdown(f"""
+<div style="background:#FFF1F2;border:1.5px solid #FECACA;border-radius:12px;
+            padding:0.9rem 1.1rem;margin-bottom:1rem">
+  <div style="font-size:0.7rem;font-weight:800;color:#991B1B;letter-spacing:0.06em;
+              text-transform:uppercase;margin-bottom:0.45rem">⚠️ 投資前請注意以下風險</div>
+  {_warn_rows}
+</div>""", unsafe_allow_html=True)
+
         close_t = df["Close"].dropna()
         vol_t   = df["Volume"].dropna()
 
