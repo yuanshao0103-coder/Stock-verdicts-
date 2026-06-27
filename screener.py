@@ -775,16 +775,19 @@ def _inject_screener_css():
     }
     /* 3. 覆蓋首頁 min-height:140px，改為小按鈕（specificity 0,4,1 > 0,3,1）*/
     div[data-testid="stHorizontalBlock"]:has(.hot-chip) [data-testid="stVerticalBlock"] .stButton > button {
-        min-height: 2rem !important;
-        height: 2rem !important;
-        padding: 0 0.5rem !important;
+        min-height: unset !important;
+        height: auto !important;
+        padding: 0.3rem 0.6rem !important;
         font-size: 0.78rem !important;
-        line-height: 2rem !important;
+        line-height: 1.2 !important;
         border-radius: 6px !important;
         color: #374151 !important;
         background: #F3F4F6 !important;
         border: 1px solid #D1D5DB !important;
         box-shadow: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     div[data-testid="stHorizontalBlock"]:has(.hot-chip) [data-testid="stVerticalBlock"] .stButton > button:hover {
         background: #E5E7EB !important;
