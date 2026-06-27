@@ -1375,6 +1375,104 @@ with tab_trade:
 
         st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
+        # ── 何時買何時賣（MA 圖）────────────────────────
+        st.markdown("<div style='font-size:0.88rem;font-weight:700;color:#111;margin-bottom:.2rem'>📍 何時買？何時賣？</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:0.73rem;color:#6B7280;margin-bottom:.5rem'>黃線是關鍵分界。股價從下方穿越黃線 → 可考慮買入 ▲；股價跌破黃線往下 → 不管賺賠都要出場 ▼　　右上角顯示該時間點建議操作。</div>", unsafe_allow_html=True)
+        try:
+            import plotly.graph_objects as _go2
+            import json as _json2
+            _tdf = df.copy()
+            _tma  = _tdf["Close"].rolling(20).mean()
+            _t_safe_now = bool(_tdf["Close"].iloc[-1] >= _tma.dropna().iloc[-1])
+            _t_badge_txt   = "<b>買</b>" if _t_safe_now else "<b>賣</b>"
+            _t_badge_color = "#00C853"   if _t_safe_now else "#FF1744"
+            _t_max_c = _tdf["Close"].clip(lower=_tma)
+            _t_min_c = _tdf["Close"].clip(upper=_tma)
+            _t_fig = _go2.Figure()
+            _t_fig.add_trace(_go2.Scatter(x=_tdf.index,y=_tma,name="買賣分界線",
+                line=dict(color="#F9A825",width=2.5),showlegend=True))
+            _t_fig.add_trace(_go2.Scatter(x=_tdf.index,y=_t_max_c,name="安全區（持倉）",
+                fill="tonexty",fillcolor="rgba(0,200,83,0.18)",line=dict(width=0),showlegend=True))
+            _t_fig.add_trace(_go2.Scatter(x=_tdf.index,y=_tma,
+                line=dict(width=0),showlegend=False,hoverinfo="skip"))
+            _t_fig.add_trace(_go2.Scatter(x=_tdf.index,y=_t_min_c,name="危險區（出場）",
+                fill="tonexty",fillcolor="rgba(255,50,50,0.22)",line=dict(width=0),showlegend=True))
+            # 建議買入/出場訊號 markers
+            _t_sig = ["🟢 可買" if bool(p >= m) else "🔴 出場"
+                      for p, m in zip(_tdf["Close"], _tma)]
+            _t_fig.add_trace(_go2.Scatter(x=_tdf.index,y=_tdf["Close"],name="股價",
+                line=dict(color="#FFFFFF",width=1.8),
+                customdata=_t_sig,
+                hovertemplate="%{x|%Y-%m-%d}　%{customdata}<br>股價 %{y:,.1f}<extra></extra>"))
+            _t_em = (_tdf["Close"] >= _tma) & (_tdf["Close"].shift(1) < _tma.shift(1))
+            _t_em = _t_em.fillna(False)
+            if _t_em.sum():
+                _t_fig.add_trace(_go2.Scatter(x=_tdf.index[_t_em],y=(_tdf["Close"][_t_em]*0.988),
+                    mode="markers",name="建議買入 ▲",
+                    marker=dict(color="#00C853",size=11,symbol="triangle-up"),showlegend=True,
+                    hovertemplate="%{x|%Y-%m-%d}<br>買入參考 %{y:,.1f}<extra></extra>"))
+            _t_xm = (_tdf["Close"] < _tma) & (_tdf["Close"].shift(1) >= _tma.shift(1))
+            _t_xm = _t_xm.fillna(False)
+            if _t_xm.sum():
+                _t_fig.add_trace(_go2.Scatter(x=_tdf.index[_t_xm],y=(_tdf["Close"][_t_xm]*1.012),
+                    mode="markers",name="建議出場 ▼",
+                    marker=dict(color="#FF1744",size=11,symbol="triangle-down"),showlegend=True,
+                    hovertemplate="%{x|%Y-%m-%d}<br>出場參考 %{y:,.1f}<extra></extra>"))
+            # 右上角「買/賣」badge annotation（index 0）
+            _t_fig.add_annotation(
+                xref="paper",yref="paper",x=0.99,y=0.97,
+                text=_t_badge_txt,
+                font=dict(size=28,color=_t_badge_color,family="DM Sans"),
+                showarrow=False,bgcolor="rgba(17,17,17,0.85)",
+                bordercolor=_t_badge_color,borderwidth=2.5,borderpad=10,align="center")
+            _t_fig.update_layout(
+                height=370,paper_bgcolor="#111",plot_bgcolor="#111",
+                font=dict(family="DM Sans",color="#888",size=11),
+                hovermode="x unified",
+                legend=dict(orientation="h",yanchor="bottom",y=1.01,
+                            bgcolor="rgba(0,0,0,0)",font=dict(color="#aaa")),
+                margin=dict(l=0,r=55,t=8,b=0),
+                xaxis=dict(showgrid=False,zeroline=False,color="#555"),
+                yaxis=dict(gridcolor="#1e1e1e",zeroline=False,side="right",color="#888"))
+            st.plotly_chart(_t_fig,use_container_width=True)
+            # JS：hover 時動態更新右上角 badge
+            _t_sm = _json2.dumps({
+                str(d.date()): bool(float(p) >= float(m))
+                for d,p,m in zip(_tdf.index,_tdf["Close"],_tma) if not pd.isna(m)})
+            st.markdown(f"""<script>
+(function(){{
+  var sm={_t_sm};
+  function go(){{
+    try{{
+      var ps=(window.parent||window).document.querySelectorAll('.js-plotly-plot');
+      if(!ps.length){{setTimeout(go,400);return;}}
+      var pl=ps[ps.length-1];
+      if(pl._maDone)return; pl._maDone=true;
+      var Plotly=(window.parent||window).Plotly;
+      pl.on('plotly_hover',function(ev){{
+        try{{
+          var x=ev.points[0].x;
+          var dt=x instanceof Date?x.toISOString().slice(0,10):String(x).slice(0,10);
+          if(dt in sm){{
+            var ok=sm[dt];
+            Plotly.relayout(pl,{{
+              'annotations[0].text':ok?'<b>買</b>':'<b>賣</b>',
+              'annotations[0].font.color':ok?'#00C853':'#FF1744',
+              'annotations[0].bordercolor':ok?'#00C853':'#FF1744'
+            }});
+          }}
+        }}catch(e){{}}
+      }});
+    }}catch(e){{}}
+  }}
+  setTimeout(go,1200);
+}})();
+</script>""", unsafe_allow_html=True)
+        except Exception as _te:
+            st.warning(f"買賣圖錯誤：{_te}")
+
+        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
         # ── 週度投資機會圖 ────────────────────────────────
         st.markdown("<div style='font-size:0.65rem;color:#9CA3AF;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem'>最佳買入時機 — 歷年週度勝率 vs 成交量</div>", unsafe_allow_html=True)
         try:
